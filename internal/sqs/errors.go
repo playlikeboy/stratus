@@ -2,6 +2,7 @@ package sqs
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/ODudek/stratus/internal/awsapi"
 )
@@ -67,4 +68,37 @@ func errMessageNotInflight() *awsapi.Error {
 		QueryCode: "AWS.SimpleQueueService.MessageNotInflight",
 		Message:   "The message referred to isn't in flight.",
 	}
+}
+
+// batchError builds one of the errors that reject a whole batch request.
+func batchError(code, message string) *awsapi.Error {
+	return &awsapi.Error{
+		Status:    http.StatusBadRequest,
+		Code:      code,
+		QueryCode: "AWS.SimpleQueueService." + code,
+		Message:   message,
+	}
+}
+
+func errEmptyBatch(entryType string) *awsapi.Error {
+	return batchError("EmptyBatchRequest", "There should be at least one "+entryType+" in the request.")
+}
+
+func errTooManyEntries(n int) *awsapi.Error {
+	return batchError("TooManyEntriesInBatchRequest",
+		"Maximum number of entries per request are 10. You have sent "+strconv.Itoa(n)+".")
+}
+
+func errBatchIDsNotDistinct(id string) *awsapi.Error {
+	return batchError("BatchEntryIdsNotDistinct", "Id "+id+" repeated.")
+}
+
+func errInvalidBatchEntryID() *awsapi.Error {
+	return batchError("InvalidBatchEntryId", "A batch entry id can only contain alphanumeric "+
+		"characters, hyphens and underscores. It can be at most 80 letters long.")
+}
+
+func errBatchTooLong(size int) *awsapi.Error {
+	return batchError("BatchRequestTooLong", "Batch requests cannot be longer than "+
+		strconv.Itoa(maxBatchBytes)+" bytes. You have sent "+strconv.Itoa(size)+" bytes.")
 }

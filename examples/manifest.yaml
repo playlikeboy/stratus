@@ -10,3 +10,43 @@ sqs:
     - name: notifications
       delaySeconds: 5
       receiveWaitTimeSeconds: 20
+    - name: uploads
+    - name: ledger.fifo
+      contentBasedDeduplication: true
+
+kinesis:
+  streams:
+    - name: events
+      shards: 2
+
+s3:
+  buckets:
+    - name: documents
+    - name: packages
+      versioning: true
+      lifecycle:
+        - prefix: tmp/
+          expirationDays: 7
+      notifications:
+        - queue: uploads
+          prefix: incoming/
+          suffix: .zip
+
+dynamodb:
+  tables:
+    - name: orders
+      partitionKey: {name: customer}
+      sortKey: {name: order_id, type: N}
+      ttlAttribute: expires_at
+      localIndexes:
+        - name: by-status
+          sortKey: {name: status}
+          projection: INCLUDE
+          nonKeyAttributes: [total]
+
+stepFunctions:
+  stateMachines:
+    - name: delayed-notification
+      definitionFile: delayed-notification.asl.json
+      substitutions:
+        QueueUrl: http://localhost:4566/000000000000/notifications

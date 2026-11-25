@@ -38,6 +38,14 @@ var operations = map[string]operation{
 	"ReceiveMessage":          op((*Service).receiveMessage),
 	"DeleteMessage":           op((*Service).deleteMessage),
 	"ChangeMessageVisibility": op((*Service).changeMessageVisibility),
+
+	"SendMessageBatch":             op((*Service).sendMessageBatch),
+	"DeleteMessageBatch":           op((*Service).deleteMessageBatch),
+	"ChangeMessageVisibilityBatch": op((*Service).changeMessageVisibilityBatch),
+	"ListDeadLetterSourceQueues":   op((*Service).listDeadLetterSourceQueues),
+	"TagQueue":                     op((*Service).tagQueue),
+	"UntagQueue":                   op((*Service).untagQueue),
+	"ListQueueTags":                op((*Service).listQueueTags),
 }
 
 // op adapts a typed operation: it decodes the request body into In.
@@ -58,6 +66,10 @@ func op[In any](fn func(*Service, *http.Request, In) (any, error)) operation {
 }
 
 func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("X-Amz-Target") == "" && isQueryRequest(r) {
+		s.serveQuery(w, r)
+		return
+	}
 	out, err := s.serve(w, r)
 	if err != nil {
 		var apiErr *awsapi.Error
@@ -76,7 +88,7 @@ func (s *Service) serve(w http.ResponseWriter, r *http.Request) (any, error) {
 		return nil, &awsapi.Error{
 			Status:  http.StatusBadRequest,
 			Code:    "UnsupportedProtocol",
-			Message: "stratus speaks only the SQS JSON protocol: the request has no X-Amz-Target header.",
+			Message: "stratus speaks the SQS JSON protocol and the query protocol: the request has no X-Amz-Target header and no Action.",
 		}
 	}
 	name := strings.TrimPrefix(target, targetPrefix)
@@ -100,10 +112,11 @@ type empty struct{}
 type createQueueInput struct {
 	QueueName  string
 	Attributes map[string]string
+	Tags       map[string]string // the wire name is "tags"; decoding ignores case
 }
 
 func (s *Service) createQueue(r *http.Request, in createQueueInput) (any, error) {
-	if err := s.CreateQueue(in.QueueName, in.Attributes); err != nil {
+	if err := s.CreateQueueWithTags(in.QueueName, in.Attributes, in.Tags); err != nil {
 		return nil, err
 	}
 	return map[string]string{"QueueUrl": queueURL(r, s.identity.Account, in.QueueName)}, nil
@@ -134,15 +147,20 @@ func (s *Service) getQueueURL(r *http.Request, in getQueueURLInput) (any, error)
 
 type listQueuesInput struct {
 	QueueNamePrefix string
+	MaxResults      *int
+	NextToken       string
 }
 
 func (s *Service) listQueues(r *http.Request, in listQueuesInput) (any, error) {
-	names := s.ListQueues(in.QueueNamePrefix)
-	urls := make([]string, 0, len(names))
-	for _, name := range names {
-		urls = append(urls, queueURL(r, s.identity.Account, name))
+	limit, err := pageSize(in.MaxResults)
+	if err != nil {
+		return nil, err
 	}
-	return map[string][]string{"QueueUrls": urls}, nil
+	names, next, err := s.ListQueuesPage(in.QueueNamePrefix, limit, in.NextToken)
+	if err != nil {
+		return nil, err
+	}
+	return s.queueURLs(r, names, next), nil
 }
 
 type getQueueAttributesInput struct {
@@ -175,166 +193,6 @@ type setQueueAttributesInput struct {
 
 func (s *Service) setQueueAttributes(_ *http.Request, in setQueueAttributesInput) (any, error) {
 	return empty{}, s.SetAttributes(queueName(in.QueueUrl), in.Attributes)
-}
-
-type sendMessageInput struct {
-	QueueUrl          string //nolint:revive // the wire name
-	MessageBody       string
-	DelaySeconds      *int
-	MessageAttributes map[string]MessageAttribute
-}
-
-type sendMessageOutput struct {
-	MessageId              string //nolint:revive // the wire name
-	MD5OfMessageBody       string
-	MD5OfMessageAttributes string `json:",omitempty"`
-}
-
-func (s *Service) sendMessage(_ *http.Request, in sendMessageInput) (any, error) {
-	delay, err := optionalSeconds("DelaySeconds", in.DelaySeconds, maxDelay)
-	if err != nil {
-		return nil, err
-	}
-	out, err := s.Send(queueName(in.QueueUrl), SendInput{
-		Body:       in.MessageBody,
-		Delay:      delay,
-		Attributes: in.MessageAttributes,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return sendMessageOutput{
-		MessageId:              out.MessageID,
-		MD5OfMessageBody:       out.MD5OfBody,
-		MD5OfMessageAttributes: out.MD5OfAttributes,
-	}, nil
-}
-
-type receiveMessageInput struct {
-	QueueUrl                    string //nolint:revive // the wire name
-	MaxNumberOfMessages         *int
-	VisibilityTimeout           *int
-	WaitTimeSeconds             *int
-	AttributeNames              []string // the deprecated spelling of the next field
-	MessageSystemAttributeNames []string
-	MessageAttributeNames       []string
-}
-
-type receivedMessage struct {
-	MessageId              string //nolint:revive // the wire name
-	ReceiptHandle          string
-	MD5OfBody              string
-	Body                   string
-	Attributes             map[string]string           `json:",omitempty"`
-	MD5OfMessageAttributes string                      `json:",omitempty"`
-	MessageAttributes      map[string]MessageAttribute `json:",omitempty"`
-}
-
-func (s *Service) receiveMessage(r *http.Request, in receiveMessageInput) (any, error) {
-	visibility, err := optionalSeconds("VisibilityTimeout", in.VisibilityTimeout, maxVisibility)
-	if err != nil {
-		return nil, err
-	}
-	wait, err := optionalSeconds("WaitTimeSeconds", in.WaitTimeSeconds, maxReceiveWait)
-	if err != nil {
-		return nil, err
-	}
-	limit := 0
-	if in.MaxNumberOfMessages != nil {
-		if limit = *in.MaxNumberOfMessages; limit == 0 {
-			limit = -1 // an explicit 0 is invalid, unlike an absent value
-		}
-	}
-	received, err := s.Receive(r.Context(), queueName(in.QueueUrl), ReceiveInput{
-		Max:        limit,
-		Visibility: visibility,
-		Wait:       wait,
-	})
-	if err != nil {
-		return nil, err
-	}
-	if len(received) == 0 {
-		return empty{}, nil
-	}
-	systemNames := slices.Concat(in.MessageSystemAttributeNames, in.AttributeNames)
-	messages := make([]receivedMessage, 0, len(received))
-	for _, m := range received {
-		attrs := selectAttributes(m.Attributes, in.MessageAttributeNames)
-		messages = append(messages, receivedMessage{
-			MessageId:              m.MessageID,
-			ReceiptHandle:          m.Receipt,
-			MD5OfBody:              m.MD5OfBody,
-			Body:                   m.Body,
-			Attributes:             s.systemAttributes(m, systemNames),
-			MD5OfMessageAttributes: md5OfAttributes(attrs),
-			MessageAttributes:      attrs,
-		})
-	}
-	return map[string][]receivedMessage{"Messages": messages}, nil
-}
-
-func (s *Service) systemAttributes(m Received, names []string) map[string]string {
-	if len(names) == 0 {
-		return nil
-	}
-	all := map[string]string{
-		"SenderId":                         s.identity.Account,
-		"SentTimestamp":                    strconv.FormatInt(m.SentAt.UnixMilli(), 10),
-		"ApproximateReceiveCount":          strconv.Itoa(m.ReceiveCount),
-		"ApproximateFirstReceiveTimestamp": strconv.FormatInt(m.FirstReceivedAt.UnixMilli(), 10),
-	}
-	if slices.Contains(names, "All") {
-		return all
-	}
-	out := map[string]string{}
-	for _, name := range names {
-		if value, ok := all[name]; ok {
-			out[name] = value
-		}
-	}
-	return out
-}
-
-// selectAttributes returns the attributes a receiver asked for: by name, by
-// "prefix.*", or all of them with "All" or ".*".
-func selectAttributes(attrs map[string]MessageAttribute, names []string) map[string]MessageAttribute {
-	out := map[string]MessageAttribute{}
-	for name, attr := range attrs {
-		for _, want := range names {
-			prefix, isPrefix := strings.CutSuffix(want, ".*")
-			if want == "All" || want == name || (isPrefix && strings.HasPrefix(name, prefix)) {
-				out[name] = attr
-				break
-			}
-		}
-	}
-	return out
-}
-
-type deleteMessageInput struct {
-	QueueUrl      string //nolint:revive // the wire name
-	ReceiptHandle string
-}
-
-func (s *Service) deleteMessage(_ *http.Request, in deleteMessageInput) (any, error) {
-	return empty{}, s.Delete(queueName(in.QueueUrl), in.ReceiptHandle)
-}
-
-type changeMessageVisibilityInput struct {
-	QueueUrl          string //nolint:revive // the wire name
-	ReceiptHandle     string
-	VisibilityTimeout *int
-}
-
-func (s *Service) changeMessageVisibility(_ *http.Request, in changeMessageVisibilityInput) (any, error) {
-	if in.VisibilityTimeout == nil {
-		return nil, errMissingParameter("VisibilityTimeout")
-	}
-	timeout, err := optionalSeconds("VisibilityTimeout", in.VisibilityTimeout, maxVisibility)
-	if err != nil {
-		return nil, err
-	}
-	return empty{}, s.ChangeVisibility(queueName(in.QueueUrl), in.ReceiptHandle, *timeout)
 }
 
 func optionalSeconds(name string, value *int, limit time.Duration) (*time.Duration, error) {

@@ -25,10 +25,19 @@ type Service interface {
 // Gateway routes requests to services.
 type Gateway struct {
 	services []Service
+	fallback Service
 }
 
 func New(services ...Service) *Gateway {
 	return &Gateway{services: services}
+}
+
+// WithFallback names the service that gets the requests carrying neither a
+// target nor a credential scope: anonymous and hand-written requests, which
+// only a REST service such as S3 can make sense of.
+func (g *Gateway) WithFallback(s Service) *Gateway {
+	g.fallback = s
+	return g
 }
 
 // Services returns the registered services' names.
@@ -79,6 +88,9 @@ func (g *Gateway) resolve(target, scope string) Service {
 				return s
 			}
 		}
+	}
+	if target == "" && scope == "" {
+		return g.fallback
 	}
 	return nil
 }

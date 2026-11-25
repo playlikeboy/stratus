@@ -1,0 +1,23 @@
+{
+  "Comment": "Waits until the time in the input, then sends the payload to a queue.",
+  "StartAt": "WaitUntil",
+  "States": {
+    "WaitUntil": {
+      "Type": "Wait",
+      "TimestampPath": "$.send_at",
+      "Next": "Send"
+    },
+    "Send": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sqs:sendMessage",
+      "Parameters": {
+        "QueueUrl": "${QueueUrl}",
+        "MessageBody.$": "$.payload"
+      },
+      "Retry": [
+        {"ErrorEquals": ["States.ALL"], "IntervalSeconds": 2, "MaxAttempts": 3, "BackoffRate": 2}
+      ],
+      "End": true
+    }
+  }
+}

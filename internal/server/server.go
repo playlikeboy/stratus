@@ -5,11 +5,16 @@ package server
 import (
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/ODudek/stratus/internal/awsapi"
 	"github.com/ODudek/stratus/internal/clock"
+	"github.com/ODudek/stratus/internal/dynamodb"
 	"github.com/ODudek/stratus/internal/gateway"
+	"github.com/ODudek/stratus/internal/kinesis"
 	"github.com/ODudek/stratus/internal/manifest"
+	"github.com/ODudek/stratus/internal/s3"
+	"github.com/ODudek/stratus/internal/sfn"
 	"github.com/ODudek/stratus/internal/sqs"
 )
 
@@ -23,9 +28,12 @@ type Config struct {
 // Server is one emulator. It is ready as soon as New returns: the manifest's
 // resources already exist.
 type Server struct {
+	// resetMu makes a reset one step: two interleaved resets would each find
+	// the other's resources in the way.
+	resetMu  sync.Mutex
 	identity awsapi.Identity
 	manifest manifest.Manifest
-	sqs      *sqs.Service
+	targets  manifest.Targets
 	gateway  *gateway.Gateway
 	control  *http.ServeMux
 }
@@ -41,11 +49,17 @@ func New(cfg Config) (*Server, error) {
 		cfg.Clock = clock.System{}
 	}
 	queues := sqs.New(cfg.Identity, cfg.Clock)
+	streams := kinesis.New(cfg.Identity, cfg.Clock)
+	buckets := s3.New(cfg.Identity, cfg.Clock)
+	buckets.SetQueueNotifier(notifyQueue(queues))
+	tables := dynamodb.New(cfg.Identity, cfg.Clock)
+	machines := sfn.New(cfg.Identity, cfg.Clock)
+	machines.RegisterIntegration(sqsSendMessageResource, sqsSendMessage(queues))
 	s := &Server{
 		identity: cfg.Identity,
 		manifest: cfg.Manifest,
-		sqs:      queues,
-		gateway:  gateway.New(queues),
+		targets:  manifest.Targets{Identity: cfg.Identity, SQS: queues, Kinesis: streams, S3: buckets, DynamoDB: tables, SFN: machines},
+		gateway:  gateway.New(queues, streams, buckets, tables, machines).WithFallback(buckets),
 		control:  http.NewServeMux(),
 	}
 	s.control.HandleFunc("GET /_stratus/ready", s.handleReady)
@@ -62,12 +76,14 @@ func New(cfg Config) (*Server, error) {
 // Reset returns the emulator to the state it started in: everything is
 // dropped and the manifest's resources are created again.
 func (s *Server) Reset() error {
+	s.resetMu.Lock()
+	defer s.resetMu.Unlock()
 	s.gateway.Reset()
 	return s.applyManifest()
 }
 
 func (s *Server) applyManifest() error {
-	return s.manifest.Apply(s.identity, s.sqs)
+	return s.manifest.Apply(s.targets)
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {

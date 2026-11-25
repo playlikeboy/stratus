@@ -1,10 +1,8 @@
-// Package sqs emulates Amazon SQS standard queues over the JSON protocol.
+// Package sqs emulates Amazon SQS standard and FIFO queues over the JSON protocol.
 package sqs
 
 import (
-	"context"
 	"regexp"
-	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -13,7 +11,12 @@ import (
 	"github.com/ODudek/stratus/internal/clock"
 )
 
-var validName = regexp.MustCompile(`^[A-Za-z0-9_-]{1,80}$`)
+var (
+	validName     = regexp.MustCompile(`^[A-Za-z0-9_-]{1,80}$`)
+	validFifoName = regexp.MustCompile(`^[A-Za-z0-9_-]{1,75}\.fifo$`)
+)
+
+const fifoSuffix = ".fifo"
 
 // Service holds every queue of one emulator.
 type Service struct {
@@ -29,22 +32,29 @@ type queue struct {
 	createdAt  time.Time
 	modifiedAt time.Time
 	cfg        config
-	messages   []*message
+	messages   []*message // in delivery order; for a FIFO queue, in sequence order
+	tags       map[string]string
+	fifo       fifoState
 	// changed is closed, and replaced, whenever a waiting receiver should look
 	// at the queue again.
 	changed chan struct{}
 }
 
 type message struct {
-	id              string
-	body            string
-	md5OfBody       string
-	attributes      map[string]MessageAttribute // never changed after the send
-	sentAt          time.Time
-	visibleAt       time.Time
-	firstReceivedAt time.Time
-	receiveCount    int
-	receipt         string
+	id               string
+	body             string
+	md5OfBody        string
+	attributes       map[string]MessageAttribute // never changed after the send
+	traceHeader      string                      // the AWSTraceHeader system attribute
+	groupID          string                      // FIFO queues only
+	dedupID          string                      // FIFO queues only
+	sequence         string                      // FIFO queues only
+	deadLetterSource string                      // ARN of the queue the message was moved from
+	sentAt           time.Time
+	visibleAt        time.Time
+	firstReceivedAt  time.Time
+	receiveCount     int
+	receipt          string
 }
 
 // MessageAttribute is a message attribute, in its wire form.
@@ -59,13 +69,23 @@ type SendInput struct {
 	Body       string
 	Delay      *time.Duration // nil: the queue's delay
 	Attributes map[string]MessageAttribute
+	// SystemAttributes are the message system attributes; AWSTraceHeader is the
+	// only one SQS accepts.
+	SystemAttributes map[string]MessageAttribute
+	// GroupID is required on a FIFO queue and ignored on a standard one.
+	GroupID string
+	// DeduplicationID is required on a FIFO queue without content-based
+	// deduplication and rejected on a standard queue.
+	DeduplicationID string
 }
 
 // SendOutput describes a sent message.
 type SendOutput struct {
-	MessageID       string
-	MD5OfBody       string
-	MD5OfAttributes string
+	MessageID             string
+	MD5OfBody             string
+	MD5OfAttributes       string
+	MD5OfSystemAttributes string
+	SequenceNumber        string // FIFO queues only
 }
 
 // ReceiveInput is one receive call.
@@ -85,6 +105,12 @@ type Received struct {
 	SentAt          time.Time
 	FirstReceivedAt time.Time
 	ReceiveCount    int
+
+	TraceHeader      string // AWSTraceHeader, when the sender set one
+	GroupID          string // FIFO queues only
+	DeduplicationID  string // FIFO queues only
+	SequenceNumber   string // FIFO queues only
+	DeadLetterSource string // ARN of the queue a dead-lettered message came from
 }
 
 func New(identity awsapi.Identity, c clock.Clock) *Service {
@@ -109,9 +135,15 @@ func (s *Service) arn(name string) string { return s.identity.ARN("sqs", name) }
 // CreateQueue creates a queue, or does nothing when one of that name already
 // has exactly these attributes.
 func (s *Service) CreateQueue(name string, attrs map[string]string) error {
-	if !validName.MatchString(name) {
-		return errInvalidParameter("Queue name can only include alphanumeric characters, " +
-			"hyphens, or underscores, 1 to 80 in length (FIFO queues are not supported).")
+	return s.CreateQueueWithTags(name, attrs, nil)
+}
+
+// CreateQueueWithTags is CreateQueue that also tags a new queue. The tags of a
+// queue that already exists are left as they are.
+func (s *Service) CreateQueueWithTags(name string, attrs, tags map[string]string) error {
+	fifo, err := queueKind(name, attrs)
+	if err != nil {
+		return err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -126,13 +158,43 @@ func (s *Service) CreateQueue(name string, attrs map[string]string) error {
 		}
 		return nil
 	}
-	cfg, err := s.withAttributes(defaultConfig(), attrs)
+	base := defaultConfig()
+	base.fifo = fifo
+	cfg, err := s.withAttributes(base, attrs)
 	if err != nil {
 		return err
 	}
-	now := s.clock.Now()
-	s.queues[name] = &queue{name: name, createdAt: now, modifiedAt: now, cfg: cfg, changed: make(chan struct{})}
+	q := &queue{name: name, cfg: cfg, tags: map[string]string{}, changed: make(chan struct{})}
+	if err := q.addTags(tags); err != nil {
+		return err
+	}
+	q.createdAt = s.clock.Now()
+	q.modifiedAt = q.createdAt
+	s.queues[name] = q
 	return nil
+}
+
+// queueKind checks the name and the FifoQueue attribute against each other and
+// says whether the queue is a FIFO one: the suffix and the attribute need each other.
+func queueKind(name string, attrs map[string]string) (bool, error) {
+	fifo := attrs["FifoQueue"] == "true"
+	if v, ok := attrs["FifoQueue"]; ok && v != "true" && v != "false" {
+		return false, errInvalidAttributeValue("FifoQueue", "must be true or false.")
+	}
+	if fifo != strings.HasSuffix(name, fifoSuffix) {
+		return false, errInvalidParameter("The name of a FIFO queue can only include alphanumeric " +
+			"characters, hyphens, or underscores, must end with .fifo suffix and be 1 to 80 in length, " +
+			"and a name ending in .fifo needs the FifoQueue attribute set to true.")
+	}
+	valid := validName
+	if fifo {
+		valid = validFifoName
+	}
+	if !valid.MatchString(name) {
+		return false, errInvalidParameter("Queue name can only include alphanumeric characters, " +
+			"hyphens, or underscores, 1 to 80 in length (FIFO queue names also end with .fifo).")
+	}
+	return fifo, nil
 }
 
 func (s *Service) DeleteQueue(name string) error {
@@ -153,20 +215,6 @@ func (s *Service) Exists(name string) bool {
 	defer s.mu.Unlock()
 	_, ok := s.queues[name]
 	return ok
-}
-
-// ListQueues returns the sorted names of the queues with the prefix.
-func (s *Service) ListQueues(prefix string) []string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	names := make([]string, 0, len(s.queues))
-	for name := range s.queues {
-		if strings.HasPrefix(name, prefix) {
-			names = append(names, name)
-		}
-	}
-	slices.Sort(names)
-	return names
 }
 
 func (s *Service) SetAttributes(name string, attrs map[string]string) error {
@@ -196,238 +244,14 @@ func (s *Service) Attributes(name string) (map[string]string, error) {
 	return s.attributesLocked(q, s.clock.Now()), nil
 }
 
-func (s *Service) Send(name string, in SendInput) (SendOutput, error) {
-	if in.Body == "" {
-		return SendOutput{}, errMissingParameter("MessageBody")
-	}
-	if len(in.Body) > maxMessageBytes {
-		return SendOutput{}, errInvalidParameter("One or more parameters are invalid. " +
-			"Reason: Message must be shorter than 1048576 bytes.")
-	}
-	if err := validateAttributes(in.Attributes); err != nil {
-		return SendOutput{}, err
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	q, err := s.queueLocked(name)
-	if err != nil {
-		return SendOutput{}, err
-	}
-	delay := q.cfg.delay
-	if in.Delay != nil {
-		delay = *in.Delay
-	}
-	now := s.clock.Now()
-	m := &message{
-		id:         awsapi.NewID(),
-		body:       in.Body,
-		md5OfBody:  md5Hex(in.Body),
-		attributes: in.Attributes,
-		sentAt:     now,
-		visibleAt:  now.Add(delay),
-	}
-	q.messages = append(q.messages, m)
-	wake(q)
-	return SendOutput{MessageID: m.id, MD5OfBody: m.md5OfBody, MD5OfAttributes: md5OfAttributes(m.attributes)}, nil
-}
-
-func validateAttributes(attrs map[string]MessageAttribute) error {
-	if len(attrs) > 10 {
-		return errInvalidParameter("Number of message attributes [" +
-			seconds(time.Duration(len(attrs))*time.Second) + "] exceeds the allowed maximum [10].")
-	}
-	for name, attr := range attrs {
-		kind, _, _ := strings.Cut(attr.DataType, ".")
-		switch kind {
-		case "String", "Number":
-			if attr.StringValue == nil {
-				return errInvalidParameter("Message attribute '" + name + "' must have a StringValue.")
-			}
-		case "Binary":
-			if attr.BinaryValue == nil {
-				return errInvalidParameter("Message attribute '" + name + "' must have a BinaryValue.")
-			}
-		default:
-			return errInvalidParameter("Message attribute '" + name +
-				"' has an invalid DataType; it must start with String, Number or Binary.")
-		}
-	}
-	return nil
-}
-
-// Receive returns up to in.Max visible messages and hides them for the
-// visibility timeout. With nothing to return it waits for the wait time, for a
-// message to arrive or become visible, or for ctx to end.
-func (s *Service) Receive(ctx context.Context, name string, in ReceiveInput) ([]Received, error) {
-	limit := in.Max
-	if limit == 0 {
-		limit = 1
-	}
-	if limit < 1 || limit > maxReceiveBatch {
-		return nil, errInvalidParameter("Value for parameter MaxNumberOfMessages is invalid. " +
-			"Reason: Must be between 1 and 10, if provided.")
-	}
-
-	var deadline time.Time
-	for {
-		s.mu.Lock()
-		q, err := s.queueLocked(name)
-		if err != nil {
-			s.mu.Unlock()
-			return nil, err
-		}
-		now := s.clock.Now()
-		if deadline.IsZero() {
-			wait := q.cfg.receiveWait
-			if in.Wait != nil {
-				wait = *in.Wait
-			}
-			deadline = now.Add(wait)
-		}
-		visibility := q.cfg.visibility
-		if in.Visibility != nil {
-			visibility = *in.Visibility
-		}
-		out := s.receiveLocked(q, limit, visibility, now)
-		changed := q.changed
-		pause := deadline.Sub(now)
-		if next := nextVisible(q, now); !next.IsZero() && next.Sub(now) < pause {
-			pause = next.Sub(now)
-		}
-		s.mu.Unlock()
-
-		if len(out) > 0 || pause <= 0 {
-			return out, nil
-		}
-		timer := time.NewTimer(pause)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return nil, nil
-		case <-changed:
-			timer.Stop()
-		case <-timer.C:
-		}
-	}
-}
-
-// receiveLocked hands out the visible messages of q, moving to the dead-letter
-// queue those already received maxReceiveCount times.
-func (s *Service) receiveLocked(q *queue, limit int, visibility time.Duration, now time.Time) []Received {
-	dlq := s.deadLetterLocked(q)
-	var out []Received
-	kept := make([]*message, 0, len(q.messages))
-	for _, m := range q.messages {
-		if len(out) == limit || m.visibleAt.After(now) {
-			kept = append(kept, m)
-			continue
-		}
-		if dlq != nil && m.receiveCount >= q.cfg.redrive.maxReceiveCount {
-			m.receipt = ""
-			dlq.messages = append(dlq.messages, m)
-			wake(dlq)
-			continue
-		}
-		m.receiveCount++
-		if m.firstReceivedAt.IsZero() {
-			m.firstReceivedAt = now
-		}
-		m.receipt = awsapi.NewID()
-		m.visibleAt = now.Add(visibility)
-		kept = append(kept, m)
-		out = append(out, Received{
-			MessageID:       m.id,
-			Receipt:         m.receipt,
-			Body:            m.body,
-			MD5OfBody:       m.md5OfBody,
-			Attributes:      m.attributes,
-			SentAt:          m.sentAt,
-			FirstReceivedAt: m.firstReceivedAt,
-			ReceiveCount:    m.receiveCount,
-		})
-	}
-	q.messages = kept
-	return out
-}
-
-func (s *Service) deadLetterLocked(q *queue) *queue {
-	if q.cfg.redrive == nil || q.cfg.redrive.target == q.name {
-		return nil
-	}
-	return s.queues[q.cfg.redrive.target]
-}
-
-// nextVisible is when the next hidden message of q becomes visible; zero when
-// none is hidden.
-func nextVisible(q *queue, now time.Time) time.Time {
-	var next time.Time
-	for _, m := range q.messages {
-		if m.visibleAt.After(now) && (next.IsZero() || m.visibleAt.Before(next)) {
-			next = m.visibleAt
-		}
-	}
-	return next
-}
-
-// Delete removes the message the receipt handle was issued for. A handle that
-// is no longer current deletes nothing, as in SQS.
-func (s *Service) Delete(name, receipt string) error {
-	if receipt == "" {
-		return errReceiptHandleInvalid()
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	q, err := s.queueLocked(name)
-	if err != nil {
-		return err
-	}
-	q.messages = slices.DeleteFunc(q.messages, func(m *message) bool { return m.receipt == receipt })
-	return nil
-}
-
-// ChangeVisibility hides an in-flight message for timeout, counted from now.
-func (s *Service) ChangeVisibility(name, receipt string, timeout time.Duration) error {
-	if receipt == "" {
-		return errReceiptHandleInvalid()
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	q, err := s.queueLocked(name)
-	if err != nil {
-		return err
-	}
-	now := s.clock.Now()
-	for _, m := range q.messages {
-		if m.receipt != receipt {
-			continue
-		}
-		if !m.visibleAt.After(now) {
-			return errMessageNotInflight()
-		}
-		m.visibleAt = now.Add(timeout)
-		wake(q)
-		return nil
-	}
-	return errMessageNotInflight()
-}
-
-// Purge removes every message of the queue.
-func (s *Service) Purge(name string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	q, err := s.queueLocked(name)
-	if err != nil {
-		return err
-	}
-	q.messages = nil
-	return nil
-}
-
+// queueLocked finds a queue and, since every operation goes through it, drops
+// the messages that outlived the queue's retention period.
 func (s *Service) queueLocked(name string) (*queue, error) {
 	q, ok := s.queues[name]
 	if !ok {
 		return nil, errQueueNotFound()
 	}
+	dropExpired(q, s.clock.Now())
 	return q, nil
 }
 

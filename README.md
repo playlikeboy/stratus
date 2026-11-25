@@ -12,18 +12,23 @@ end-to-end tests. One static Go binary, state in memory, ready in milliseconds.
 - **Built for tests.** `POST /_stratus/reset` returns to the manifest's state between suites, and
   the `stratustest` package runs the emulator inside a Go test with no container.
 
-## Status
+## Services
 
-| Service | State |
-|---|---|
-| SQS (standard queues, JSON protocol) | available |
-| Kinesis, S3, DynamoDB, Step Functions | planned, in that order |
+| Service | Covers | Not emulated |
+|---|---|---|
+| **SQS** | standard and FIFO queues, delays, visibility timeouts, long polling, message attributes, dead-letter queues, batch operations, retention, tags; JSON and query protocols | message move tasks (redrive) |
+| **Kinesis** | streams and shards, `PutRecord`/`PutRecords`, every shard iterator type with expiry, `GetRecords` with `MillisBehindLatest`, retention, tags | enhanced fan-out (`SubscribeToShard`), shard split and merge, encryption |
+| **S3** | objects, multipart uploads, versioning, range and conditional requests, all checksum algorithms, `aws-chunked` bodies, presigned URLs, lifecycle expiry, event notifications to queues | ACLs, policies, tagging, object lock, replication |
+| **DynamoDB** | tables, items, `Query`/`Scan`, the full expression language, local and global secondary indexes, batches, transactions, TTL | streams, `UpdateTable`, consumed-capacity reporting, reserved-word checks |
+| **Step Functions** | Amazon States Language with `Pass`, `Task`, `Wait`, `Choice`, `Succeed`, `Fail`, `Retry`/`Catch`, task tokens; the `sqs:sendMessage` integration | `Parallel`, `Map`, `.sync` integrations, JSONata, activities |
 
-SQS covers `CreateQueue`, `DeleteQueue`, `GetQueueUrl`, `ListQueues`, `GetQueueAttributes`,
-`SetQueueAttributes`, `PurgeQueue`, `SendMessage`, `ReceiveMessage`, `DeleteMessage` and
-`ChangeMessageVisibility`, with delays, visibility timeouts, long polling, message attributes and
-dead-letter queues. Not emulated: FIFO queues, the batch operations, the legacy query protocol and
-message retention (a message stays until it is deleted or purged).
+An operation that is not emulated answers with an error that names it. Some optional request
+settings are accepted and have no effect: server-side encryption, DynamoDB stream and tag settings
+on `CreateTable`, and consumed-capacity reporting.
+
+Time-driven clean-up never runs in the background: SQS drops a message past its retention when
+its queue is next used, while S3 lifecycle expiry, DynamoDB TTL and Kinesis trimming do nothing
+until a test asks for them through the Go API.
 
 ## Run
 
@@ -51,6 +56,14 @@ aws --endpoint-url http://localhost:4566 sqs list-queues
 | `-region` | `eu-central-1` | region of every resource |
 | `-account` | `000000000000` | account id of every resource |
 | `-healthcheck` | | check that a running stratus on `-listen` is ready, then exit |
+| `-tls-listen` | none | address to also serve HTTPS on, for example `:4567` |
+| `-tls-cert`, `-tls-key` | none | certificate and key for HTTPS; a self-signed pair is generated when empty |
+| `-tls-hosts` | `localhost,127.0.0.1,::1` | names and addresses a generated certificate is valid for |
+| `-tls-cert-out` | none | file to write a generated certificate to, for clients to trust |
+
+HTTPS matters for one case: the AWS SDKs upload a request body they cannot rewind (a pipe, a
+network stream) only over HTTPS. Over plain HTTP `PutObject` needs a seekable body, or the
+transfer manager.
 
 The image has no shell, so a container health check calls the binary:
 
@@ -67,14 +80,48 @@ sqs:
   queues:
     - name: orders
       visibilityTimeoutSeconds: 60
-      deadLetter:
-        queue: orders-dlq
-        maxReceiveCount: 5
+      deadLetter: {queue: orders-dlq, maxReceiveCount: 5}
     - name: orders-dlq
+    - name: uploads
+    - name: ledger.fifo            # a name ending in .fifo makes a FIFO queue
+      contentBasedDeduplication: true
+
+kinesis:
+  streams:
+    - name: events
+      shards: 2                    # default 1
+
+s3:
+  buckets:
+    - name: packages
+      versioning: true
+      lifecycle:
+        - {prefix: tmp/, expirationDays: 7}
+      notifications:               # s3:ObjectCreated:* unless events are listed
+        - {queue: uploads, prefix: incoming/, suffix: .zip}
+
+dynamodb:
+  tables:
+    - name: orders
+      partitionKey: {name: customer}            # type S unless given
+      sortKey: {name: order_id, type: N}
+      ttlAttribute: expires_at
+      localIndexes:
+        - name: by-status
+          sortKey: {name: status}
+          projection: INCLUDE                   # ALL (default), KEYS_ONLY or INCLUDE
+          nonKeyAttributes: [total]
+
+stepFunctions:
+  stateMachines:
+    - name: delayed-notification
+      definitionFile: delayed-notification.asl.json   # relative to the manifest; or `definition:` inline
+      substitutions:                                  # replaces ${QueueUrl} in the definition
+        QueueUrl: http://localhost:4566/000000000000/orders
 ```
 
-Queues may be listed in any order. An unknown key, a duplicate name or a dead-letter queue that is
-not declared is an error at start.
+Resources may be listed in any order. An unknown key, a duplicate name, or a reference to a queue
+that is not declared is an error at start. `examples/manifest.yaml` is a complete one.
 
 ## Control endpoints
 
@@ -97,6 +144,8 @@ client := sqs.New(sqs.Options{
 ```
 
 The emulator stops with the test. `srv.Reset()` returns it to the manifest's state.
+`stratustest.WithTLS()` serves it over HTTPS; pass `srv.Client()` to the AWS client as its
+`HTTPClient`.
 
 ## Develop
 
@@ -105,8 +154,9 @@ make test   # go test -race ./...
 make lint   # gofmt and go vet
 ```
 
-The tests in `stratustest/` drive the emulator through the real AWS SDK for Go: a behaviour is
-considered emulated when the SDK accepts it, including its typed errors.
+Every service is tested through the real AWS SDK for Go, in its own package and end to end in
+`stratustest/`: a behaviour is considered emulated when the SDK accepts it, including its typed
+errors. None of it has been compared against live AWS yet.
 
 Layout: `cmd/stratus` is the binary, `internal/gateway` routes requests, each service lives in
 `internal/<service>`, `internal/manifest` reads the resource manifest and `internal/server` puts
