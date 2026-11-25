@@ -8,6 +8,7 @@ import (
 
 	"github.com/ODudek/stratus/internal/awsapi"
 	"github.com/ODudek/stratus/internal/clock"
+	"github.com/ODudek/stratus/internal/dynamodb"
 	"github.com/ODudek/stratus/internal/gateway"
 	"github.com/ODudek/stratus/internal/kinesis"
 	"github.com/ODudek/stratus/internal/manifest"
@@ -47,13 +48,14 @@ func New(cfg Config) (*Server, error) {
 	streams := kinesis.New(cfg.Identity, cfg.Clock)
 	buckets := s3.New(cfg.Identity, cfg.Clock)
 	buckets.SetQueueNotifier(notifyQueue(queues))
+	tables := dynamodb.New(cfg.Identity, cfg.Clock)
 	machines := sfn.New(cfg.Identity, cfg.Clock)
 	machines.RegisterIntegration(sqsSendMessageResource, sqsSendMessage(queues))
 	s := &Server{
 		identity: cfg.Identity,
 		manifest: cfg.Manifest,
-		targets:  manifest.Targets{Identity: cfg.Identity, SQS: queues, Kinesis: streams, S3: buckets, SFN: machines},
-		gateway:  gateway.New(queues, streams, buckets, machines).WithFallback(buckets),
+		targets:  manifest.Targets{Identity: cfg.Identity, SQS: queues, Kinesis: streams, S3: buckets, DynamoDB: tables, SFN: machines},
+		gateway:  gateway.New(queues, streams, buckets, tables, machines).WithFallback(buckets),
 		control:  http.NewServeMux(),
 	}
 	s.control.HandleFunc("GET /_stratus/ready", s.handleReady)

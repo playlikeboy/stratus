@@ -17,6 +17,7 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/ODudek/stratus/internal/awsapi"
+	"github.com/ODudek/stratus/internal/dynamodb"
 	"github.com/ODudek/stratus/internal/kinesis"
 	"github.com/ODudek/stratus/internal/s3"
 	"github.com/ODudek/stratus/internal/sfn"
@@ -29,14 +30,16 @@ type Targets struct {
 	SQS      *sqs.Service
 	Kinesis  *kinesis.Service
 	S3       *s3.Service
+	DynamoDB *dynamodb.Service
 	SFN      *sfn.Service
 }
 
 // Manifest is the resources to create; the zero value creates nothing.
 type Manifest struct {
-	SQS     SQS     `yaml:"sqs"`
-	Kinesis Kinesis `yaml:"kinesis"`
-	S3      S3      `yaml:"s3"`
+	SQS      SQS      `yaml:"sqs"`
+	Kinesis  Kinesis  `yaml:"kinesis"`
+	S3       S3       `yaml:"s3"`
+	DynamoDB DynamoDB `yaml:"dynamodb"`
 	// StepFunctions is applied last: a state machine may refer to the other resources.
 	StepFunctions StepFunctions `yaml:"stepFunctions"`
 }
@@ -212,6 +215,9 @@ func (m Manifest) validate() error {
 			}
 		}
 	}
+	if err := m.DynamoDB.validate(); err != nil {
+		return err
+	}
 	machines := map[string]bool{}
 	for i, sm := range m.StepFunctions.StateMachines {
 		switch {
@@ -241,6 +247,9 @@ func (m Manifest) Apply(t Targets) error {
 		if err := t.S3.CreateBucket(b.Name, b.options(t.Identity)); err != nil {
 			return fmt.Errorf("s3 bucket %q: %w", b.Name, err)
 		}
+	}
+	if err := m.DynamoDB.apply(t.DynamoDB); err != nil {
+		return err
 	}
 	for _, sm := range m.StepFunctions.StateMachines {
 		definition := sm.Definition
