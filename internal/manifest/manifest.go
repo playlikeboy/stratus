@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -17,6 +18,7 @@ import (
 
 	"github.com/ODudek/stratus/internal/awsapi"
 	"github.com/ODudek/stratus/internal/kinesis"
+	"github.com/ODudek/stratus/internal/sfn"
 	"github.com/ODudek/stratus/internal/sqs"
 )
 
@@ -25,12 +27,31 @@ type Targets struct {
 	Identity awsapi.Identity
 	SQS      *sqs.Service
 	Kinesis  *kinesis.Service
+	SFN      *sfn.Service
 }
 
 // Manifest is the resources to create; the zero value creates nothing.
 type Manifest struct {
 	SQS     SQS     `yaml:"sqs"`
 	Kinesis Kinesis `yaml:"kinesis"`
+	// StepFunctions is applied last: a state machine may refer to the other resources.
+	StepFunctions StepFunctions `yaml:"stepFunctions"`
+}
+
+type StepFunctions struct {
+	StateMachines []StateMachine `yaml:"stateMachines"`
+}
+
+// StateMachine is declared with its Amazon States Language definition, either
+// inline or in a file named relative to the manifest.
+type StateMachine struct {
+	Name           string `yaml:"name"`
+	Definition     string `yaml:"definition"`
+	DefinitionFile string `yaml:"definitionFile"`
+	// Substitutions replaces each "${key}" in the definition with its value.
+	Substitutions map[string]string `yaml:"substitutions"`
+	// Type is STANDARD (the default) or EXPRESS.
+	Type string `yaml:"type"`
 }
 
 type Kinesis struct {
@@ -72,7 +93,30 @@ func Load(path string) (Manifest, error) {
 	if err != nil {
 		return Manifest{}, fmt.Errorf("manifest %s: %w", path, err)
 	}
+	if err := m.readDefinitionFiles(filepath.Dir(path)); err != nil {
+		return Manifest{}, fmt.Errorf("manifest %s: %w", path, err)
+	}
 	return m, nil
+}
+
+// readDefinitionFiles loads the state machine definitions kept in files, which
+// are named relative to dir.
+func (m Manifest) readDefinitionFiles(dir string) error {
+	for i, sm := range m.StepFunctions.StateMachines {
+		if sm.DefinitionFile == "" {
+			continue
+		}
+		file := sm.DefinitionFile
+		if !filepath.IsAbs(file) {
+			file = filepath.Join(dir, file)
+		}
+		data, err := os.ReadFile(file) //nolint:gosec // the operator names the file
+		if err != nil {
+			return fmt.Errorf("state machine %q: %w", sm.Name, err)
+		}
+		m.StepFunctions.StateMachines[i].Definition = string(data)
+	}
+	return nil
 }
 
 // Parse decodes and validates a manifest.
@@ -119,6 +163,18 @@ func (m Manifest) validate() error {
 		}
 		streams[st.Name] = true
 	}
+	machines := map[string]bool{}
+	for i, sm := range m.StepFunctions.StateMachines {
+		switch {
+		case sm.Name == "":
+			return fmt.Errorf("stepFunctions.stateMachines[%d]: name is required", i)
+		case machines[sm.Name]:
+			return fmt.Errorf("stepFunctions.stateMachines: %q is declared twice", sm.Name)
+		case (sm.Definition == "") == (sm.DefinitionFile == ""):
+			return fmt.Errorf("stepFunctions.stateMachines: %q needs exactly one of definition and definitionFile", sm.Name)
+		}
+		machines[sm.Name] = true
+	}
 	return nil
 }
 
@@ -130,6 +186,19 @@ func (m Manifest) Apply(t Targets) error {
 	for _, st := range m.Kinesis.Streams {
 		if err := t.Kinesis.CreateStream(st.Name, max(st.Shards, 1)); err != nil {
 			return fmt.Errorf("kinesis stream %q: %w", st.Name, err)
+		}
+	}
+	for _, sm := range m.StepFunctions.StateMachines {
+		definition := sm.Definition
+		for key, value := range sm.Substitutions {
+			definition = strings.ReplaceAll(definition, "${"+key+"}", value)
+		}
+		var opts []sfn.CreateOption
+		if sm.Type != "" {
+			opts = append(opts, sfn.WithType(sm.Type))
+		}
+		if err := t.SFN.CreateStateMachine(sm.Name, definition, opts...); err != nil {
+			return fmt.Errorf("state machine %q: %w", sm.Name, err)
 		}
 	}
 	return nil

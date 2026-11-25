@@ -11,6 +11,7 @@ import (
 	"github.com/ODudek/stratus/internal/gateway"
 	"github.com/ODudek/stratus/internal/kinesis"
 	"github.com/ODudek/stratus/internal/manifest"
+	"github.com/ODudek/stratus/internal/sfn"
 	"github.com/ODudek/stratus/internal/sqs"
 )
 
@@ -43,11 +44,13 @@ func New(cfg Config) (*Server, error) {
 	}
 	queues := sqs.New(cfg.Identity, cfg.Clock)
 	streams := kinesis.New(cfg.Identity, cfg.Clock)
+	machines := sfn.New(cfg.Identity, cfg.Clock)
+	machines.RegisterIntegration(sqsSendMessageResource, sqsSendMessage(queues))
 	s := &Server{
 		identity: cfg.Identity,
 		manifest: cfg.Manifest,
-		targets:  manifest.Targets{Identity: cfg.Identity, SQS: queues, Kinesis: streams},
-		gateway:  gateway.New(queues, streams),
+		targets:  manifest.Targets{Identity: cfg.Identity, SQS: queues, Kinesis: streams, SFN: machines},
+		gateway:  gateway.New(queues, streams, machines),
 		control:  http.NewServeMux(),
 	}
 	s.control.HandleFunc("GET /_stratus/ready", s.handleReady)
