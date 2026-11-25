@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/url"
 	"path"
+	"strings"
 	"time"
 
 	"github.com/ODudek/stratus/internal/awsapi"
@@ -71,4 +72,13 @@ func queueNameOf(queueURL string) string {
 		return ""
 	}
 	return path.Base(u.Path)
+}
+
+// notifyQueue delivers an S3 event notification to the queue with the ARN.
+func notifyQueue(queues *sqs.Service) func(queueARN, messageBody string) error {
+	return func(queueARN, messageBody string) error {
+		name := queueARN[strings.LastIndex(queueARN, ":")+1:]
+		_, err := queues.Send(name, sqs.SendInput{Body: messageBody})
+		return err
+	}
 }

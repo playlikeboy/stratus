@@ -265,7 +265,8 @@ func TestControlEndpoints(t *testing.T) {
 		}
 	}
 	// A request no service claims is refused loudly, not answered by a default.
-	if resp := do(t, http.MethodGet, srv.URL+"/some-bucket/key", "", nil); resp.StatusCode != http.StatusNotImplemented {
+	unknown := map[string]string{"X-Amz-Target": "Unknown_20200101.Operation"}
+	if resp := do(t, http.MethodPost, srv.URL+"/", "{}", unknown); resp.StatusCode != http.StatusNotImplemented {
 		t.Errorf("unroutable request: HTTP %d, want 501", resp.StatusCode)
 	}
 }

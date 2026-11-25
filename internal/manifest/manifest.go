@@ -18,6 +18,7 @@ import (
 
 	"github.com/ODudek/stratus/internal/awsapi"
 	"github.com/ODudek/stratus/internal/kinesis"
+	"github.com/ODudek/stratus/internal/s3"
 	"github.com/ODudek/stratus/internal/sfn"
 	"github.com/ODudek/stratus/internal/sqs"
 )
@@ -27,6 +28,7 @@ type Targets struct {
 	Identity awsapi.Identity
 	SQS      *sqs.Service
 	Kinesis  *kinesis.Service
+	S3       *s3.Service
 	SFN      *sfn.Service
 }
 
@@ -34,8 +36,35 @@ type Targets struct {
 type Manifest struct {
 	SQS     SQS     `yaml:"sqs"`
 	Kinesis Kinesis `yaml:"kinesis"`
+	S3      S3      `yaml:"s3"`
 	// StepFunctions is applied last: a state machine may refer to the other resources.
 	StepFunctions StepFunctions `yaml:"stepFunctions"`
+}
+
+type S3 struct {
+	Buckets []Bucket `yaml:"buckets"`
+}
+
+type Bucket struct {
+	Name          string               `yaml:"name"`
+	Versioning    bool                 `yaml:"versioning"`
+	Lifecycle     []BucketExpiration   `yaml:"lifecycle"`
+	Notifications []BucketNotification `yaml:"notifications"`
+}
+
+// BucketExpiration expires the objects under Prefix after ExpirationDays.
+type BucketExpiration struct {
+	Prefix         string `yaml:"prefix"`
+	ExpirationDays int    `yaml:"expirationDays"`
+}
+
+// BucketNotification sends the bucket's events to a queue of this manifest.
+type BucketNotification struct {
+	Queue string `yaml:"queue"`
+	// Events defaults to "s3:ObjectCreated:*".
+	Events []string `yaml:"events"`
+	Prefix string   `yaml:"prefix"`
+	Suffix string   `yaml:"suffix"`
 }
 
 type StepFunctions struct {
@@ -163,6 +192,26 @@ func (m Manifest) validate() error {
 		}
 		streams[st.Name] = true
 	}
+	buckets := map[string]bool{}
+	for i, b := range m.S3.Buckets {
+		if b.Name == "" {
+			return fmt.Errorf("s3.buckets[%d]: name is required", i)
+		}
+		if buckets[b.Name] {
+			return fmt.Errorf("s3.buckets: %q is declared twice", b.Name)
+		}
+		buckets[b.Name] = true
+		for _, rule := range b.Lifecycle {
+			if rule.ExpirationDays < 1 {
+				return fmt.Errorf("s3.buckets: %q has a lifecycle rule without expirationDays", b.Name)
+			}
+		}
+		for _, n := range b.Notifications {
+			if !names[n.Queue] {
+				return fmt.Errorf("s3.buckets: %q notifies the queue %q, which is not declared", b.Name, n.Queue)
+			}
+		}
+	}
 	machines := map[string]bool{}
 	for i, sm := range m.StepFunctions.StateMachines {
 		switch {
@@ -186,6 +235,11 @@ func (m Manifest) Apply(t Targets) error {
 	for _, st := range m.Kinesis.Streams {
 		if err := t.Kinesis.CreateStream(st.Name, max(st.Shards, 1)); err != nil {
 			return fmt.Errorf("kinesis stream %q: %w", st.Name, err)
+		}
+	}
+	for _, b := range m.S3.Buckets {
+		if err := t.S3.CreateBucket(b.Name, b.options(t.Identity)); err != nil {
+			return fmt.Errorf("s3 bucket %q: %w", b.Name, err)
 		}
 	}
 	for _, sm := range m.StepFunctions.StateMachines {
@@ -247,4 +301,20 @@ func (q Queue) attributes() map[string]string {
 		}
 	}
 	return attrs
+}
+
+func (b Bucket) options(identity awsapi.Identity) s3.BucketOptions {
+	opts := s3.BucketOptions{Versioning: b.Versioning}
+	for _, rule := range b.Lifecycle {
+		opts.Lifecycle = append(opts.Lifecycle, s3.LifecycleRule{Prefix: rule.Prefix, ExpirationDays: rule.ExpirationDays})
+	}
+	for _, n := range b.Notifications {
+		opts.Notifications = append(opts.Notifications, s3.QueueNotification{
+			QueueARN: identity.ARN("sqs", n.Queue),
+			Events:   n.Events,
+			Prefix:   n.Prefix,
+			Suffix:   n.Suffix,
+		})
+	}
+	return opts
 }
