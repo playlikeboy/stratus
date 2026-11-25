@@ -1,0 +1,12 @@
+# Resources that exist when stratus starts: `stratus -manifest examples/manifest.yaml`.
+sqs:
+  queues:
+    - name: orders
+      visibilityTimeoutSeconds: 60
+      deadLetter:
+        queue: orders-dlq
+        maxReceiveCount: 5
+    - name: orders-dlq
+    - name: notifications
+      delaySeconds: 5
+      receiveWaitTimeSeconds: 20
