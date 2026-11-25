@@ -1,6 +1,7 @@
 package s3
 
 import (
+	"bytes"
 	"io"
 	"net/http"
 	"strconv"
@@ -52,6 +53,26 @@ func isAWSChunked(h http.Header) bool {
 		strings.Contains(h.Get("Content-Encoding"), "aws-chunked")
 }
 
+// maxPrealloc is the most memory reserved on a client's word about a size
+// before its bytes arrive; beyond it a buffer grows with the data.
+const maxPrealloc = 64 << 20
+
+// readExactly reads n bytes of r, into a slice of exactly that size when n is
+// small enough to reserve up front.
+func readExactly(r io.Reader, n int64) ([]byte, error) {
+	if n <= maxPrealloc {
+		data := make([]byte, n)
+		_, err := io.ReadFull(r, data)
+		return data, err
+	}
+	var buf bytes.Buffer
+	buf.Grow(maxPrealloc)
+	if _, err := io.CopyN(&buf, r, n); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
 // readBody returns the decoded body and the aws-chunked trailers, if any. A
 // body with a known length is read straight into a slice of that size.
 func readBody(r *http.Request, limit int64) ([]byte, map[string]string, error) {
@@ -65,8 +86,8 @@ func readBody(r *http.Request, limit int64) ([]byte, map[string]string, error) {
 		return nil, nil, errEntityTooLarge()
 	}
 	if r.ContentLength >= 0 {
-		data := make([]byte, r.ContentLength)
-		if _, err := io.ReadFull(r.Body, data); err != nil {
+		data, err := readExactly(r.Body, r.ContentLength)
+		if err != nil {
 			return nil, nil, errIncompleteBody("You did not provide the number of bytes specified by the Content-Length HTTP header.")
 		}
 		return data, nil, nil

@@ -5,6 +5,7 @@ package server
 import (
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/ODudek/stratus/internal/awsapi"
 	"github.com/ODudek/stratus/internal/clock"
@@ -27,6 +28,9 @@ type Config struct {
 // Server is one emulator. It is ready as soon as New returns: the manifest's
 // resources already exist.
 type Server struct {
+	// resetMu makes a reset one step: two interleaved resets would each find
+	// the other's resources in the way.
+	resetMu  sync.Mutex
 	identity awsapi.Identity
 	manifest manifest.Manifest
 	targets  manifest.Targets
@@ -72,6 +76,8 @@ func New(cfg Config) (*Server, error) {
 // Reset returns the emulator to the state it started in: everything is
 // dropped and the manifest's resources are created again.
 func (s *Server) Reset() error {
+	s.resetMu.Lock()
+	defer s.resetMu.Unlock()
 	s.gateway.Reset()
 	return s.applyManifest()
 }

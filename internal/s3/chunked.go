@@ -24,7 +24,7 @@ const maxChunkLine = 4096
 // limit bounds the decoded size. Trailer names are returned lower-cased.
 func decodeAWSChunked(r io.Reader, sizeHint, limit int64) ([]byte, map[string]string, error) {
 	br := bufio.NewReaderSize(r, 64*1024)
-	data := make([]byte, 0, max(0, min(sizeHint, limit)))
+	data := make([]byte, 0, max(0, min(sizeHint, limit, maxPrealloc)))
 	for {
 		line, err := readLine(br)
 		if errors.Is(err, io.EOF) {
@@ -66,10 +66,16 @@ func chunkSize(line string) (int64, error) {
 
 // appendN appends exactly n bytes of r to data, growing it at most once.
 func appendN(data []byte, r io.Reader, n int64) ([]byte, error) {
-	start := len(data)
-	data = growTo(data, start+int(n))
-	if _, err := io.ReadFull(r, data[start:]); err != nil {
-		return nil, errIncompleteBody("The aws-chunked body ended inside a chunk.")
+	// A chunk is taken in steps, so that a header announcing a huge chunk
+	// reserves memory only as its bytes arrive.
+	for n > 0 {
+		step := min(n, maxPrealloc)
+		start := len(data)
+		data = growTo(data, start+int(step))
+		if _, err := io.ReadFull(r, data[start:]); err != nil {
+			return nil, errIncompleteBody("The aws-chunked body ended inside a chunk.")
+		}
+		n -= step
 	}
 	return data, nil
 }

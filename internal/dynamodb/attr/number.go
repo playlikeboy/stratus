@@ -78,11 +78,34 @@ mantissaDone:
 	if i != len(s) {
 		return Number{}, false
 	}
-	coef, _ := new(big.Int).SetString(digits.String(), 10)
+	text, shift := trimDigits(digits.String())
+	coef, _ := new(big.Int).SetString(text, 10)
 	if neg {
 		coef.Neg(coef)
 	}
-	return normalise(coef, exp-frac), true
+	return normalise(coef, exp-frac+shift), true
+}
+
+// maxParsedDigits is more than any valid number has; a longer coefficient is
+// cut, so that a huge literal costs nothing to reject.
+const maxParsedDigits = 100
+
+// trimDigits drops the leading and trailing zeros of a digit string and
+// returns how many trailing ones it dropped, which is a power of ten. A
+// coefficient still longer than maxParsedDigits is cut to that many digits
+// ending in a non-zero one: it stays too precise to be valid.
+func trimDigits(d string) (string, int) {
+	d = strings.TrimLeft(d, "0")
+	trimmed := strings.TrimRight(d, "0")
+	shift := len(d) - len(trimmed)
+	if trimmed == "" {
+		return "0", 0
+	}
+	if len(trimmed) > maxParsedDigits {
+		shift += len(trimmed) - maxParsedDigits
+		trimmed = trimmed[:maxParsedDigits-1] + "1"
+	}
+	return trimmed, shift
 }
 
 // normalise strips the trailing zeros of coef; it owns coef.

@@ -91,14 +91,13 @@ func (s *Service) wakeChan() <-chan struct{} {
 func (s *Service) Reset() {
 	s.mu.Lock()
 	done := s.cancelRunningLocked(func(*execution) bool { return true })
-	s.mu.Unlock()
-	waitAll(done)
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	// The state is dropped before the wait: an execution started while the
+	// cancelled ones wind down must belong to the new state, not escape it.
 	s.machines = map[string]*machine{}
 	s.executions = map[string]*execution{}
 	s.tasks = map[string]*taskWait{}
+	s.mu.Unlock()
+	waitAll(done)
 }
 
 // cancelRunningLocked aborts the running executions that match and returns

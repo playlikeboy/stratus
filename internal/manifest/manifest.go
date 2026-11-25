@@ -174,6 +174,9 @@ func (m Manifest) validate() error {
 		if names[q.Name] {
 			return fmt.Errorf("sqs.queues: %q is declared twice", q.Name)
 		}
+		if q.ContentBasedDeduplication && !strings.HasSuffix(q.Name, ".fifo") {
+			return fmt.Errorf("sqs.queues: %q sets contentBasedDeduplication but is not a FIFO queue: its name must end in .fifo", q.Name)
+		}
 		names[q.Name] = true
 	}
 	for _, q := range m.SQS.Queues {
@@ -212,6 +215,9 @@ func (m Manifest) validate() error {
 		for _, n := range b.Notifications {
 			if !names[n.Queue] {
 				return fmt.Errorf("s3.buckets: %q notifies the queue %q, which is not declared", b.Name, n.Queue)
+			}
+			if strings.HasSuffix(n.Queue, ".fifo") {
+				return fmt.Errorf("s3.buckets: %q notifies the FIFO queue %q; S3 delivers only to standard queues", b.Name, n.Queue)
 			}
 		}
 	}

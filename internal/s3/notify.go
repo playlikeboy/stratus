@@ -90,6 +90,9 @@ func validateTarget(t *notificationTarget) error {
 	if t.Topic+t.Queue+t.CloudFunction == "" {
 		return errInvalidArgument("A notification configuration names no destination ARN.")
 	}
+	if strings.HasSuffix(t.Queue, ".fifo") {
+		return errInvalidArgument("FIFO SQS queues are not supported as S3 event destinations.")
+	}
 	if len(t.Events) == 0 {
 		return errInvalidArgument("A notification configuration names no event.")
 	}

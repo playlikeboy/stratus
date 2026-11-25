@@ -22,6 +22,16 @@ func (e *execution) run() {
 		if e.ctx.Err() != nil {
 			return
 		}
+		// Checked between states too: a loop that never waits would otherwise
+		// outrun its timeout and grow its history without end.
+		if !e.deadline.IsZero() && !e.s.clock.Now().Before(e.deadline) {
+			e.finish(statusTimedOut, "", "", "")
+			return
+		}
+		if e.historyLen() >= maxHistoryEvents {
+			e.finish(statusFailed, "", errRuntime, "The execution reached the maximum number of history events (25000).")
+			return
+		}
 		out, err := e.runState(e.m.def.states[name], input)
 		if err != nil {
 			e.fail(err)

@@ -188,7 +188,7 @@ func (t *table) keyNames(ix *index) []string {
 // isPartitionKey reports whether name, one of keyNames(ix), orders by its
 // encoding, as partitions do, rather than by value.
 func (t *table) isPartitionKey(ix *index, name string) bool {
-	return name == ix.pk || name == t.spec.PartitionKey.Name
+	return name == ix.pk || (name == t.spec.PartitionKey.Name && name != ix.sk)
 }
 
 // compareBy orders two items, or an item and a key, by the attributes of

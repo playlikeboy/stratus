@@ -18,6 +18,15 @@ func (e *execution) addLocked(typ, key string, details map[string]any) {
 	})
 }
 
+// maxHistoryEvents is where Step Functions fails an execution.
+const maxHistoryEvents = 25000
+
+func (e *execution) historyLen() int {
+	e.s.mu.Lock()
+	defer e.s.mu.Unlock()
+	return len(e.history)
+}
+
 // add records an event of a running execution.
 func (e *execution) add(typ, key string, details map[string]any) {
 	e.s.mu.Lock()

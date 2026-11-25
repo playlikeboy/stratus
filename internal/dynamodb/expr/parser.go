@@ -64,9 +64,18 @@ type parser struct {
 	undefined error
 }
 
+// maxExpressionBytes is the longest expression DynamoDB accepts.
+const maxExpressionBytes = 4096
+
 func newParser(kind, s string, ctx *Context) (*parser, error) {
 	if strings.TrimSpace(s) == "" {
 		return nil, attr.Errorf("Invalid %s: The expression can not be empty;", kind)
+	}
+	// The limit is DynamoDB's own, and it also bounds how deep the recursive
+	// parser can go.
+	if len(s) > maxExpressionBytes {
+		return nil, attr.Errorf("Invalid %s: Expression size has exceeded the maximum allowed size; "+
+			"expression size: %d", kind, len(s))
 	}
 	toks, err := lex(kind, s)
 	if err != nil {
