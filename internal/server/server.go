@@ -9,6 +9,7 @@ import (
 	"github.com/ODudek/stratus/internal/awsapi"
 	"github.com/ODudek/stratus/internal/clock"
 	"github.com/ODudek/stratus/internal/gateway"
+	"github.com/ODudek/stratus/internal/kinesis"
 	"github.com/ODudek/stratus/internal/manifest"
 	"github.com/ODudek/stratus/internal/sqs"
 )
@@ -25,7 +26,7 @@ type Config struct {
 type Server struct {
 	identity awsapi.Identity
 	manifest manifest.Manifest
-	sqs      *sqs.Service
+	targets  manifest.Targets
 	gateway  *gateway.Gateway
 	control  *http.ServeMux
 }
@@ -41,11 +42,12 @@ func New(cfg Config) (*Server, error) {
 		cfg.Clock = clock.System{}
 	}
 	queues := sqs.New(cfg.Identity, cfg.Clock)
+	streams := kinesis.New(cfg.Identity, cfg.Clock)
 	s := &Server{
 		identity: cfg.Identity,
 		manifest: cfg.Manifest,
-		sqs:      queues,
-		gateway:  gateway.New(queues),
+		targets:  manifest.Targets{Identity: cfg.Identity, SQS: queues, Kinesis: streams},
+		gateway:  gateway.New(queues, streams),
 		control:  http.NewServeMux(),
 	}
 	s.control.HandleFunc("GET /_stratus/ready", s.handleReady)
@@ -67,7 +69,7 @@ func (s *Server) Reset() error {
 }
 
 func (s *Server) applyManifest() error {
-	return s.manifest.Apply(s.identity, s.sqs)
+	return s.manifest.Apply(s.targets)
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {

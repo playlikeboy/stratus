@@ -11,16 +11,36 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"strings"
 
 	"go.yaml.in/yaml/v3"
 
 	"github.com/ODudek/stratus/internal/awsapi"
+	"github.com/ODudek/stratus/internal/kinesis"
 	"github.com/ODudek/stratus/internal/sqs"
 )
 
+// Targets is the services a manifest creates its resources in.
+type Targets struct {
+	Identity awsapi.Identity
+	SQS      *sqs.Service
+	Kinesis  *kinesis.Service
+}
+
 // Manifest is the resources to create; the zero value creates nothing.
 type Manifest struct {
-	SQS SQS `yaml:"sqs"`
+	SQS     SQS     `yaml:"sqs"`
+	Kinesis Kinesis `yaml:"kinesis"`
+}
+
+type Kinesis struct {
+	Streams []Stream `yaml:"streams"`
+}
+
+type Stream struct {
+	Name string `yaml:"name"`
+	// Shards defaults to 1.
+	Shards int `yaml:"shards"`
 }
 
 type SQS struct {
@@ -33,6 +53,8 @@ type Queue struct {
 	DelaySeconds             *int        `yaml:"delaySeconds"`
 	ReceiveWaitTimeSeconds   *int        `yaml:"receiveWaitTimeSeconds"`
 	DeadLetter               *DeadLetter `yaml:"deadLetter"`
+	// ContentBasedDeduplication applies to a FIFO queue: one whose name ends in ".fifo".
+	ContentBasedDeduplication bool `yaml:"contentBasedDeduplication"`
 }
 
 type DeadLetter struct {
@@ -84,12 +106,38 @@ func (m Manifest) validate() error {
 				q.Name, q.DeadLetter.Queue)
 		}
 	}
+	streams := map[string]bool{}
+	for i, st := range m.Kinesis.Streams {
+		if st.Name == "" {
+			return fmt.Errorf("kinesis.streams[%d]: name is required", i)
+		}
+		if streams[st.Name] {
+			return fmt.Errorf("kinesis.streams: %q is declared twice", st.Name)
+		}
+		if st.Shards < 0 {
+			return fmt.Errorf("kinesis.streams: %q has a negative number of shards", st.Name)
+		}
+		streams[st.Name] = true
+	}
 	return nil
 }
 
-// Apply creates the manifest's resources. Queues may be declared in any order:
+// Apply creates the manifest's resources.
+func (m Manifest) Apply(t Targets) error {
+	if err := m.applyQueues(t.Identity, t.SQS); err != nil {
+		return err
+	}
+	for _, st := range m.Kinesis.Streams {
+		if err := t.Kinesis.CreateStream(st.Name, max(st.Shards, 1)); err != nil {
+			return fmt.Errorf("kinesis stream %q: %w", st.Name, err)
+		}
+	}
+	return nil
+}
+
+// applyQueues creates the queues. They may be declared in any order:
 // dead-letter links are set once every queue exists.
-func (m Manifest) Apply(identity awsapi.Identity, queues *sqs.Service) error {
+func (m Manifest) applyQueues(identity awsapi.Identity, queues *sqs.Service) error {
 	for _, q := range m.SQS.Queues {
 		if err := queues.CreateQueue(q.Name, q.attributes()); err != nil {
 			return fmt.Errorf("sqs queue %q: %w", q.Name, err)
@@ -123,5 +171,11 @@ func (q Queue) attributes() map[string]string {
 	set("VisibilityTimeout", q.VisibilityTimeoutSeconds)
 	set("DelaySeconds", q.DelaySeconds)
 	set("ReceiveMessageWaitTimeSeconds", q.ReceiveWaitTimeSeconds)
+	if strings.HasSuffix(q.Name, ".fifo") {
+		attrs["FifoQueue"] = "true"
+		if q.ContentBasedDeduplication {
+			attrs["ContentBasedDeduplication"] = "true"
+		}
+	}
 	return attrs
 }

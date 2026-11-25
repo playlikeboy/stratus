@@ -7,6 +7,7 @@ import (
 
 	"github.com/ODudek/stratus/internal/awsapi"
 	"github.com/ODudek/stratus/internal/clock"
+	"github.com/ODudek/stratus/internal/kinesis"
 	"github.com/ODudek/stratus/internal/sqs"
 )
 
@@ -28,7 +29,7 @@ sqs:
 		t.Fatalf("Parse: %v", err)
 	}
 	queues := sqs.New(identity, clock.NewFake(time.Unix(0, 0)))
-	if err := m.Apply(identity, queues); err != nil {
+	if err := m.Apply(Targets{Identity: identity, SQS: queues, Kinesis: kinesis.New(identity, clock.NewFake(time.Unix(0, 0)))}); err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
 	attrs, err := queues.Attributes("jobs")
@@ -45,7 +46,7 @@ sqs:
 		t.Error("jobs-dlq was not created")
 	}
 	// Applying again, as a reset does on a fresh service, must also work twice in a row.
-	if err := m.Apply(identity, queues); err != nil {
+	if err := m.Apply(Targets{Identity: identity, SQS: queues, Kinesis: kinesis.New(identity, clock.NewFake(time.Unix(0, 0)))}); err != nil {
 		t.Fatalf("second Apply: %v", err)
 	}
 }

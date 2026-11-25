@@ -161,7 +161,8 @@ func TestCreateQueueIsIdempotentOnlyForEqualAttributes(t *testing.T) {
 	mustCreate(t, s, "jobs", nil)
 	wantCode(t, s.CreateQueue("jobs", map[string]string{"VisibilityTimeout": "46"}), "QueueNameExists")
 	wantCode(t, s.CreateQueue("jobs.fifo", nil), "InvalidParameterValue")
-	wantCode(t, s.CreateQueue("other", map[string]string{"FifoQueue": "true"}), "InvalidAttributeName")
+	wantCode(t, s.CreateQueue("other", map[string]string{"FifoQueue": "true"}), "InvalidParameterValue")
+	wantCode(t, s.CreateQueue("std", map[string]string{"ContentBasedDeduplication": "true"}), "InvalidAttributeName")
 }
 
 func TestChangeVisibility(t *testing.T) {
