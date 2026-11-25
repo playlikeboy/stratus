@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"flag"
 	"fmt"
@@ -37,6 +38,12 @@ func run(args []string) error {
 	region := flags.String("region", awsapi.DefaultRegion, "region of every resource")
 	account := flags.String("account", awsapi.DefaultAccount, "account id of every resource")
 	healthcheck := flags.Bool("healthcheck", false, "check that a running stratus on -listen is ready, then exit")
+	var https tlsOptions
+	tlsListen := flags.String("tls-listen", "", "address to also serve HTTPS on, for example :4567")
+	flags.StringVar(&https.certFile, "tls-cert", "", "certificate file for -tls-listen; a self-signed one is generated when empty")
+	flags.StringVar(&https.keyFile, "tls-key", "", "private key file for -tls-cert")
+	flags.StringVar(&https.hosts, "tls-hosts", "localhost,127.0.0.1,::1", "names and addresses a generated certificate is valid for")
+	flags.StringVar(&https.certOut, "tls-cert-out", "", "file to write a generated certificate to, for clients to trust")
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
@@ -72,8 +79,21 @@ func run(args []string) error {
 	}
 	// No read or write timeout: a long-polling receive is a slow request by design.
 	httpServer := &http.Server{Handler: emulator, ReadHeaderTimeout: 10 * time.Second}
-	served := make(chan error, 1)
+	served := make(chan error, 2)
 	go func() { served <- httpServer.Serve(listener) }()
+	if *tlsListen != "" {
+		cert, err := https.certificate()
+		if err != nil {
+			return err
+		}
+		secure, err := (&net.ListenConfig{}).Listen(ctx, "tcp", *tlsListen)
+		if err != nil {
+			return err
+		}
+		httpServer.TLSConfig = &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12}
+		go func() { served <- httpServer.ServeTLS(secure, "", "") }()
+		slog.Info("stratus serves HTTPS", "listen", secure.Addr().String())
+	}
 	slog.Info("stratus is ready", "listen", listener.Addr().String(), "region", *region, "manifest", *manifestPath)
 
 	select {

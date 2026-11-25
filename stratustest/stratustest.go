@@ -3,6 +3,7 @@
 package stratustest
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"testing"
 
@@ -22,12 +23,18 @@ type Server struct {
 	// URL is the endpoint to point AWS clients at.
 	URL string
 
-	tb    testing.TB
-	inner *server.Server
+	tb     testing.TB
+	inner  *server.Server
+	client *http.Client
 }
+
+// Client is an HTTP client that trusts the emulator's certificate when it
+// was started WithTLS.
+func (s *Server) Client() *http.Client { return s.client }
 
 type options struct {
 	manifest manifest.Manifest
+	tls      bool
 }
 
 // Option configures Start.
@@ -57,6 +64,13 @@ func WithManifestFile(path string) Option {
 	}
 }
 
+// WithTLS serves the emulator over HTTPS; AWS clients must then use
+// Server.Client, which trusts its certificate. The AWS SDK streams a request
+// body it cannot rewind only over HTTPS.
+func WithTLS() Option {
+	return func(_ testing.TB, o *options) { o.tls = true }
+}
+
 // Start runs an emulator until the test ends.
 func Start(tb testing.TB, opts ...Option) *Server {
 	tb.Helper()
@@ -68,13 +82,18 @@ func Start(tb testing.TB, opts ...Option) *Server {
 	if err != nil {
 		tb.Fatalf("stratustest: %v", err)
 	}
-	ts := httptest.NewServer(inner)
+	ts := httptest.NewUnstartedServer(inner)
+	if o.tls {
+		ts.StartTLS()
+	} else {
+		ts.Start()
+	}
 	tb.Cleanup(func() {
 		// Wake long-polling receivers first: Close waits for open requests.
 		ts.CloseClientConnections()
 		ts.Close()
 	})
-	return &Server{URL: ts.URL, tb: tb, inner: inner}
+	return &Server{URL: ts.URL, tb: tb, inner: inner, client: ts.Client()}
 }
 
 // Reset returns the emulator to the state it started in: all data is dropped

@@ -84,3 +84,24 @@ func TestAnonymousRequestGoesToS3(t *testing.T) {
 		t.Fatalf("GET from a missing bucket: HTTP %d, want 404", resp.StatusCode)
 	}
 }
+
+// Over HTTPS the SDK streams a body it cannot rewind, with its default settings.
+func TestStreamedUploadOverTLS(t *testing.T) {
+	srv := stratustest.Start(t, stratustest.WithManifest(bucketManifest), stratustest.WithTLS())
+	ctx := t.Context()
+	objects := s3.New(s3.Options{
+		Region: stratustest.Region, BaseEndpoint: aws.String(srv.URL), UsePathStyle: true,
+		Credentials: credentials(), HTTPClient: srv.Client(),
+	})
+	payload := strings.Repeat("stream ", 100_000)
+	unseekable := io.MultiReader(strings.NewReader(payload))
+	if _, err := objects.PutObject(ctx, &s3.PutObjectInput{
+		Bucket: aws.String("packages"), Key: aws.String("stream.bin"), Body: unseekable,
+	}); err != nil {
+		t.Fatalf("streamed PutObject: %v", err)
+	}
+	head, err := objects.HeadObject(ctx, &s3.HeadObjectInput{Bucket: aws.String("packages"), Key: aws.String("stream.bin")})
+	if err != nil || aws.ToInt64(head.ContentLength) != int64(len(payload)) {
+		t.Fatalf("HeadObject: length %d, error %v; want %d", aws.ToInt64(head.ContentLength), err, len(payload))
+	}
+}
