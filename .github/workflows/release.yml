@@ -1,7 +1,9 @@
 name: release
 
 # main publishes the "edge" image; a tag v1.2.3 publishes 1.2.3, 1.2, 1 and
-# latest, and a GitHub release with generated notes. Images go to Docker Hub
+# latest, and a GitHub release with generated notes. Running the workflow by
+# hand on main makes the next release: it bumps the newest tag (patch, minor or
+# major), publishes the images, and creates the tag with the GitHub release. Images go to Docker Hub
 # (stratusemulator/stratus, once DOCKERHUB_TOKEN is set) and GHCR
 # (ghcr.io/stratus-emulator/stratus), for
 # linux/amd64 and linux/arm64, with an SBOM and provenance attached.
@@ -10,6 +12,16 @@ on:
     branches: [main]
     tags: ["v*.*.*"]
   workflow_dispatch:
+    inputs:
+      bump:
+        description: Which part of the newest version to bump
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+      summary:
+        description: A short summary for users, put above the generated notes (optional)
+        type: string
+        required: false
 
 permissions:
   contents: read
@@ -30,6 +42,38 @@ jobs:
       DOCKERHUB: ${{ secrets.DOCKERHUB_TOKEN != '' && vars.DOCKERHUB_USERNAME != '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # the tags, to find the newest version
+      - id: version
+        name: Version
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          semver='^v[0-9]+\.[0-9]+\.[0-9]+$'
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            if [ "$GITHUB_REF" != refs/heads/main ]; then
+              echo "::error::A release is made from main, not $GITHUB_REF_NAME"; exit 1
+            fi
+            last=$(git tag --list 'v*' | { grep -E "$semver" || true; } | sort -V | tail -n1)
+            IFS=. read -r major minor patch <<<"${last:-v0.0.0}"
+            major=${major#v}
+            case "$BUMP" in
+              major) major=$((major + 1)); minor=0; patch=0 ;;
+              minor) minor=$((minor + 1)); patch=0 ;;
+              *) patch=$((patch + 1)) ;;
+            esac
+            tag="v$major.$minor.$patch"
+            if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+              echo "::error::$tag already exists"; exit 1
+            fi
+          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            tag=$GITHUB_REF_NAME
+          fi
+          echo "tag=${tag:-}" >> "$GITHUB_OUTPUT"
+          # latest only for a final release, never for v1.2.3-rc.1.
+          if [[ "${tag:-}" =~ $semver ]]; then latest=true; else latest=false; fi
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
+          echo "Release: ${tag:-none (edge only)}"
       - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
@@ -48,11 +92,15 @@ jobs:
           images: |
             name=${{ vars.DOCKERHUB_USERNAME }}/stratus,enable=${{ env.DOCKERHUB }}
             name=ghcr.io/stratus-emulator/stratus
+          # The version comes from the step above, so that a release run by
+          # hand on main gets the same tags as a pushed tag.
+          flavor: latest=false
           tags: |
             type=edge,branch=main
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}},enable=${{ !startsWith(github.ref, 'refs/tags/v0.') }}
+            type=semver,pattern={{version}},value=${{ steps.version.outputs.tag }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.version.outputs.tag }}
+            type=semver,pattern={{major}},value=${{ steps.version.outputs.tag }},enable=${{ !startsWith(steps.version.outputs.tag, 'v0.') }}
+            type=raw,value=latest,enable=${{ steps.version.outputs.latest == 'true' }}
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
@@ -76,7 +124,22 @@ jobs:
           short-description: Fast local emulator of SQS, S3, DynamoDB, Kinesis and Step Functions, with a web panel
           readme-filepath: .github/dockerhub.md
       - name: GitHub release
-        if: startsWith(github.ref, 'refs/tags/v')
+        # After the images, so that a failed build leaves no tag behind. A tag
+        # created here with GITHUB_TOKEN does not start this workflow again.
+        if: steps.version.outputs.tag != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes
+          TAG: ${{ steps.version.outputs.tag }}
+          LATEST: ${{ steps.version.outputs.latest }}
+          SUMMARY: ${{ inputs.summary }}
+        run: |
+          args=(--generate-notes)
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            args+=(--target "$GITHUB_SHA") # creates the tag
+          else
+            args+=(--verify-tag)
+          fi
+          [ "$LATEST" = true ] || args+=(--prerelease)
+          # The generated notes come after the summary.
+          [ -z "$SUMMARY" ] || args+=(--notes "$SUMMARY")
+          gh release create "$TAG" "${args[@]}"
