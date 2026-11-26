@@ -17,13 +17,13 @@ func TestASnapshotKeepsStreamsRecordsAndCheckpoints(t *testing.T) {
 		checkpoint = mustPut(t, s, "k", d).seq
 	}
 
-	data, err := s.Snapshot()
+	data, err := s.Snapshot(nil)
 	if err != nil {
 		t.Fatalf("Snapshot: %v", err)
 	}
 	clk.Advance(time.Minute)
 	next := New(awsapi.Identity{Account: awsapi.DefaultAccount, Region: awsapi.DefaultRegion}, clk)
-	if err := next.Restore(data); err != nil {
+	if err := next.Restore(data, nil); err != nil {
 		t.Fatalf("Restore: %v", err)
 	}
 
@@ -54,7 +54,7 @@ func shardOf(t *testing.T, s *Service, pk string) string {
 
 func TestKinesisRestoreRefusesAnotherFormat(t *testing.T) {
 	s, _ := newTestService(t, 1)
-	if err := s.Restore([]byte(`{"format":99}`)); err == nil {
+	if err := s.Restore([]byte(`{"format":99}`), nil); err == nil {
 		t.Fatal("Restore of format 99 succeeded")
 	}
 }

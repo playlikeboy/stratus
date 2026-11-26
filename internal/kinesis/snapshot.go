@@ -47,10 +47,14 @@ type recordSnapshot struct {
 
 // Snapshot returns every stream with its records, for Restore to bring back
 // in another emulator.
-func (s *Service) Snapshot() ([]byte, error) {
+// keep says which resources, by name, to include; nil includes every one.
+func (s *Service) Snapshot(keep func(name string) bool) ([]byte, error) {
 	s.mu.RLock()
 	streams := make([]*stream, 0, len(s.streams))
-	for _, st := range s.streams {
+	for name, st := range s.streams {
+		if keep != nil && !keep(name) {
+			continue
+		}
 		streams = append(streams, st)
 	}
 	s.mu.RUnlock()
@@ -81,7 +85,9 @@ func snapshotStream(st *stream) streamSnapshot {
 }
 
 // Restore replaces every stream with those of a snapshot.
-func (s *Service) Restore(data []byte) error {
+// keep says which resources of the snapshot, by name, to bring back; nil brings every one.
+func (s *Service) Restore(data []byte, keep func(name string) bool) error {
+	kept := func(name string) bool { return keep == nil || keep(name) }
 	var snap snapshot
 	if err := json.Unmarshal(data, &snap); err != nil {
 		return fmt.Errorf("reading the Kinesis state: %w", err)
@@ -93,6 +99,9 @@ func (s *Service) Restore(data []byte) error {
 	defer s.mu.Unlock()
 	streams := make(map[string]*stream, len(snap.Streams))
 	for _, ss := range snap.Streams {
+		if !kept(ss.Name) {
+			continue
+		}
 		st, err := s.restoreStream(ss)
 		if err != nil {
 			return fmt.Errorf("kinesis stream %q: %w", ss.Name, err)

@@ -85,11 +85,15 @@ type partSnapshot struct {
 }
 
 // Snapshot returns every bucket with the metadata of its objects and uploads.
-func (s *Service) Snapshot() ([]byte, error) {
+// keep says which resources, by name, to include; nil includes every one.
+func (s *Service) Snapshot(keep func(name string) bool) ([]byte, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	snap := snapshot{Format: snapshotFormat, Sequence: s.sequence, Buckets: make([]bucketSnapshot, 0, len(s.buckets))}
-	for _, b := range s.buckets {
+	for name, b := range s.buckets {
+		if keep != nil && !keep(name) {
+			continue
+		}
 		snap.Buckets = append(snap.Buckets, snapshotBucket(b))
 	}
 	sort.Slice(snap.Buckets, func(i, j int) bool { return snap.Buckets[i].Name < snap.Buckets[j].Name })
@@ -145,7 +149,9 @@ func restoreMeta(m metaSnapshot) objectMeta {
 // or a part whose file is gone, written by a store that stopped before its
 // next snapshot, is dropped with a warning; a file no version names is
 // removed.
-func (s *Service) Restore(data []byte) error {
+// keep says which resources of the snapshot, by name, to bring back; nil brings every one.
+func (s *Service) Restore(data []byte, keep func(name string) bool) error {
+	kept := func(name string) bool { return keep == nil || keep(name) }
 	var snap snapshot
 	if err := json.Unmarshal(data, &snap); err != nil {
 		return fmt.Errorf("reading the S3 state: %w", err)
@@ -153,12 +159,15 @@ func (s *Service) Restore(data []byte) error {
 	if snap.Format != snapshotFormat {
 		return fmt.Errorf("the S3 state is in format %d; this stratus reads format %d", snap.Format, snapshotFormat)
 	}
-	keep := map[string]bool{}
+	files := map[string]bool{}
 	buckets := make(map[string]*bucket, len(snap.Buckets))
 	for _, bs := range snap.Buckets {
-		buckets[bs.Name] = s.restoreBucket(bs, keep)
+		if !kept(bs.Name) {
+			continue
+		}
+		buckets[bs.Name] = s.restoreBucket(bs, files)
 	}
-	if err := s.blobs.sweep(keep); err != nil {
+	if err := s.blobs.sweep(files); err != nil {
 		return fmt.Errorf("cleaning the S3 data directory: %w", err)
 	}
 	s.mu.Lock()

@@ -67,15 +67,24 @@ func snapshotMachine(m *machine) machineSnapshot {
 // Snapshot returns the state machines and their executions. A running
 // execution is recorded at the state it is in; a task waiting for a token
 // is not kept, so a resumed Task state calls its integration again.
-func (s *Service) Snapshot() ([]byte, error) {
+// keep says which state machines, by name, to include with their
+// executions; nil includes every one.
+func (s *Service) Snapshot(keep func(name string) bool) ([]byte, error) {
+	kept := func(name string) bool { return keep == nil || keep(name) }
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	snap := snapshot{Format: snapshotFormat, Seq: s.seq}
 	for _, m := range s.machines {
+		if !kept(m.name) {
+			continue
+		}
 		snap.Machines = append(snap.Machines, snapshotMachine(m))
 	}
 	sort.Slice(snap.Machines, func(i, j int) bool { return snap.Machines[i].Name < snap.Machines[j].Name })
 	for _, e := range s.executions {
+		if !kept(e.m.name) {
+			continue
+		}
 		es := executionSnapshot{
 			ARN: e.arn, Name: e.name, Machine: snapshotMachine(e.m), Input: e.rawInput, Started: e.started,
 			Deadline: e.deadline, Seq: e.seq, Status: e.status, Stopped: e.stopped, Output: e.output,
@@ -104,7 +113,9 @@ type resumption struct {
 // Restore replaces every machine and execution with those of a snapshot and
 // resumes the running executions where they were. The integrations their
 // Task states call must be registered before.
-func (s *Service) Restore(data []byte) error {
+// keep says which resources of the snapshot, by name, to bring back; nil brings every one.
+func (s *Service) Restore(data []byte, keep func(name string) bool) error {
+	kept := func(name string) bool { return keep == nil || keep(name) }
 	var snap snapshot
 	if err := json.Unmarshal(data, &snap); err != nil {
 		return fmt.Errorf("reading the Step Functions state: %w", err)
@@ -114,6 +125,9 @@ func (s *Service) Restore(data []byte) error {
 	}
 	machines := make(map[string]*machine, len(snap.Machines))
 	for _, ms := range snap.Machines {
+		if !kept(ms.Name) {
+			continue
+		}
 		m, err := s.restoreMachine(ms)
 		if err != nil {
 			return err
@@ -123,6 +137,9 @@ func (s *Service) Restore(data []byte) error {
 	executions := make(map[string]*execution, len(snap.Executions))
 	var resume []resumption
 	for _, es := range snap.Executions {
+		if !kept(es.Machine.Name) {
+			continue
+		}
 		e, r, err := s.restoreExecution(es, machines)
 		if err != nil {
 			return fmt.Errorf("execution %s: %w", es.ARN, err)

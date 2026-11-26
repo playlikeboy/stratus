@@ -37,6 +37,11 @@ type Targets struct {
 
 // Manifest is the resources to create; the zero value creates nothing.
 type Manifest struct {
+	// Persistence keeps the data of every resource across a restart of an
+	// emulator given -state-dir; unset, it does whenever -state-dir is given.
+	// A service, and a resource, can say otherwise for itself.
+	Persistence *bool `yaml:"persistence"`
+
 	SQS      SQS      `yaml:"sqs"`
 	Kinesis  Kinesis  `yaml:"kinesis"`
 	S3       S3       `yaml:"s3"`
@@ -46,10 +51,16 @@ type Manifest struct {
 }
 
 type S3 struct {
-	Buckets []Bucket `yaml:"buckets"`
+	// Persistence keeps the data of every bucket across a restart of an emulator
+	// given -state-dir; unset, it follows the manifest's.
+	Persistence *bool    `yaml:"persistence"`
+	Buckets     []Bucket `yaml:"buckets"`
 }
 
 type Bucket struct {
+	// Persistence keeps the data of this bucket across a restart of an emulator
+	// given -state-dir; unset, it follows the service's.
+	Persistence   *bool                `yaml:"persistence"`
 	Name          string               `yaml:"name"`
 	Versioning    bool                 `yaml:"versioning"`
 	Lifecycle     []BucketExpiration   `yaml:"lifecycle"`
@@ -72,6 +83,9 @@ type BucketNotification struct {
 }
 
 type StepFunctions struct {
+	// Persistence keeps the data of every state machine and its executions across a restart of an emulator
+	// given -state-dir; unset, it follows the manifest's.
+	Persistence   *bool          `yaml:"persistence"`
 	StateMachines []StateMachine `yaml:"stateMachines"`
 }
 
@@ -85,20 +99,32 @@ type StateMachine struct {
 	Substitutions map[string]string `yaml:"substitutions"`
 	// Type is STANDARD (the default) or EXPRESS.
 	Type string `yaml:"type"`
+	// Persistence keeps the data of this state machine and its executions across a restart of an emulator
+	// given -state-dir; unset, it follows the service's.
+	Persistence *bool `yaml:"persistence"`
 }
 
 type Kinesis struct {
-	Streams []Stream `yaml:"streams"`
+	// Persistence keeps the data of every stream across a restart of an emulator
+	// given -state-dir; unset, it follows the manifest's.
+	Persistence *bool    `yaml:"persistence"`
+	Streams     []Stream `yaml:"streams"`
 }
 
 type Stream struct {
 	Name string `yaml:"name"`
 	// Shards defaults to 1.
 	Shards int `yaml:"shards"`
+	// Persistence keeps the data of this stream across a restart of an emulator
+	// given -state-dir; unset, it follows the service's.
+	Persistence *bool `yaml:"persistence"`
 }
 
 type SQS struct {
-	Queues []Queue `yaml:"queues"`
+	// Persistence keeps the data of every queue across a restart of an emulator
+	// given -state-dir; unset, it follows the manifest's.
+	Persistence *bool   `yaml:"persistence"`
+	Queues      []Queue `yaml:"queues"`
 }
 
 type Queue struct {
@@ -109,6 +135,9 @@ type Queue struct {
 	DeadLetter               *DeadLetter `yaml:"deadLetter"`
 	// ContentBasedDeduplication applies to a FIFO queue: one whose name ends in ".fifo".
 	ContentBasedDeduplication bool `yaml:"contentBasedDeduplication"`
+	// Persistence keeps the data of this queue across a restart of an emulator
+	// given -state-dir; unset, it follows the service's.
+	Persistence *bool `yaml:"persistence"`
 }
 
 type DeadLetter struct {

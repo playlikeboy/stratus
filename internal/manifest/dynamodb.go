@@ -8,7 +8,10 @@ import (
 )
 
 type DynamoDB struct {
-	Tables []Table `yaml:"tables"`
+	// Persistence keeps the data of every table across a restart of an emulator
+	// given -state-dir; unset, it follows the manifest's.
+	Persistence *bool   `yaml:"persistence"`
+	Tables      []Table `yaml:"tables"`
 }
 
 type Table struct {
@@ -19,6 +22,9 @@ type Table struct {
 	TTLAttribute  string  `yaml:"ttlAttribute"`
 	LocalIndexes  []Index `yaml:"localIndexes"`
 	GlobalIndexes []Index `yaml:"globalIndexes"`
+	// Persistence keeps the data of this table across a restart of an emulator
+	// given -state-dir; unset, it follows the service's.
+	Persistence *bool `yaml:"persistence"`
 }
 
 // Key is a key attribute; Type is S (the default), N or B.

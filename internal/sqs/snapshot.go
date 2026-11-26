@@ -68,11 +68,15 @@ type dedupSnapshot struct {
 
 // Snapshot returns every queue with its messages, for Restore to bring back
 // in another emulator.
-func (s *Service) Snapshot() ([]byte, error) {
+// keep says which resources, by name, to include; nil includes every one.
+func (s *Service) Snapshot(keep func(name string) bool) ([]byte, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	snap := snapshot{Format: snapshotFormat, Queues: make([]queueSnapshot, 0, len(s.queues))}
 	for _, q := range s.queues {
+		if keep != nil && !keep(q.name) {
+			continue
+		}
 		snap.Queues = append(snap.Queues, snapshotQueue(q))
 	}
 	sort.Slice(snap.Queues, func(i, j int) bool { return snap.Queues[i].Name < snap.Queues[j].Name })
@@ -114,7 +118,9 @@ func snapshotQueue(q *queue) queueSnapshot {
 }
 
 // Restore replaces every queue with those of a snapshot.
-func (s *Service) Restore(data []byte) error {
+// keep says which resources of the snapshot, by name, to bring back; nil brings every one.
+func (s *Service) Restore(data []byte, keep func(name string) bool) error {
+	kept := func(name string) bool { return keep == nil || keep(name) }
 	var snap snapshot
 	if err := json.Unmarshal(data, &snap); err != nil {
 		return fmt.Errorf("reading the SQS state: %w", err)
@@ -124,6 +130,9 @@ func (s *Service) Restore(data []byte) error {
 	}
 	queues := make(map[string]*queue, len(snap.Queues))
 	for _, qs := range snap.Queues {
+		if !kept(qs.Name) {
+			continue
+		}
 		queues[qs.Name] = restoreQueue(qs)
 	}
 	s.mu.Lock()

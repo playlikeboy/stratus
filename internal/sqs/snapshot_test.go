@@ -11,12 +11,12 @@ import (
 // restored is a new service, on the same clock, given s's snapshot.
 func restored(t *testing.T, s *Service) *Service {
 	t.Helper()
-	data, err := s.Snapshot()
+	data, err := s.Snapshot(nil)
 	if err != nil {
 		t.Fatalf("Snapshot: %v", err)
 	}
 	next := New(testIdentity, s.clock)
-	if err := next.Restore(data); err != nil {
+	if err := next.Restore(data, nil); err != nil {
 		t.Fatalf("Restore: %v", err)
 	}
 	return next
@@ -99,7 +99,7 @@ func TestASnapshotKeepsFIFODeduplication(t *testing.T) {
 
 func TestRestoreRefusesAnotherFormat(t *testing.T) {
 	s, _ := newService(t)
-	err := s.Restore([]byte(`{"format":99}`))
+	err := s.Restore([]byte(`{"format":99}`), nil)
 	var apiErr *awsapi.Error
 	if err == nil || errors.As(err, &apiErr) {
 		t.Fatalf("Restore of format 99: %v, want a plain error", err)

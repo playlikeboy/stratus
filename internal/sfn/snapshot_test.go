@@ -25,7 +25,7 @@ func TestARestoredExecutionResumesWhereItWas(t *testing.T) {
 	f.waitEvent(t, running, "WaitStateEntered")
 	f.advance(4 * time.Second)
 
-	data, err := f.svc.Snapshot()
+	data, err := f.svc.Snapshot(nil)
 	if err != nil {
 		t.Fatalf("Snapshot: %v", err)
 	}
@@ -34,7 +34,7 @@ func TestARestoredExecutionResumesWhereItWas(t *testing.T) {
 	next := New(awsapi.Identity{Account: awsapi.DefaultAccount, Region: awsapi.DefaultRegion}, f.clk)
 	next.RegisterIntegration(sendResource, f.rec.fn)
 	t.Cleanup(next.Reset)
-	if err := next.Restore(data); err != nil {
+	if err := next.Restore(data, nil); err != nil {
 		t.Fatalf("Restore: %v", err)
 	}
 	g := &fixture{svc: next, clk: f.clk, rec: f.rec}
@@ -68,7 +68,7 @@ func TestARestoredExecutionKeepsTheDefinitionItStartedWith(t *testing.T) {
 	if _, err := f.svc.updateStateMachine(f.svc.StateMachineARN("m"), `{"StartAt": "X", "States": {"X": {"Type": "Fail", "Error": "New"}}}`, ""); err != nil {
 		t.Fatal(err)
 	}
-	data, err := f.svc.Snapshot()
+	data, err := f.svc.Snapshot(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +76,7 @@ func TestARestoredExecutionKeepsTheDefinitionItStartedWith(t *testing.T) {
 	next := New(awsapi.Identity{Account: awsapi.DefaultAccount, Region: awsapi.DefaultRegion}, f.clk)
 	next.RegisterIntegration(sendResource, f.rec.fn)
 	t.Cleanup(next.Reset)
-	if err := next.Restore(data); err != nil {
+	if err := next.Restore(data, nil); err != nil {
 		t.Fatalf("Restore: %v", err)
 	}
 	g := &fixture{svc: next, clk: f.clk, rec: f.rec}
@@ -88,7 +88,7 @@ func TestARestoredExecutionKeepsTheDefinitionItStartedWith(t *testing.T) {
 
 func TestSFNRestoreRefusesAnotherFormat(t *testing.T) {
 	f := newFixture(t)
-	if err := f.svc.Restore([]byte(`{"format":99}`)); err == nil {
+	if err := f.svc.Restore([]byte(`{"format":99}`), nil); err == nil {
 		t.Fatal("Restore of format 99 succeeded")
 	}
 }

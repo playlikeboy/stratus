@@ -37,12 +37,12 @@ func TestASnapshotKeepsTablesAndItems(t *testing.T) {
 		orders.put(item)
 	}
 
-	data, err := s.Snapshot()
+	data, err := s.Snapshot(nil)
 	if err != nil {
 		t.Fatalf("Snapshot: %v", err)
 	}
 	next := New(identity, clk)
-	if err := next.Restore(data); err != nil {
+	if err := next.Restore(data, nil); err != nil {
 		t.Fatalf("Restore: %v", err)
 	}
 
@@ -71,7 +71,7 @@ func TestASnapshotKeepsTablesAndItems(t *testing.T) {
 
 func TestDynamoDBRestoreRefusesAnotherFormat(t *testing.T) {
 	s := New(awsapi.Identity{}, clock.NewFake(time.Unix(0, 0)))
-	if err := s.Restore([]byte(`{"format":99}`)); err == nil {
+	if err := s.Restore([]byte(`{"format":99}`), nil); err == nil {
 		t.Fatal("Restore of format 99 succeeded")
 	}
 }

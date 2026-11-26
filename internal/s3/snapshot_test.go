@@ -3,6 +3,7 @@ package s3
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -42,7 +43,7 @@ func TestASnapshotKeepsBucketsObjectsVersionsAndUploads(t *testing.T) {
 	}
 	u.parts[1] = &part{number: 1, body: partBody, etag: `"p1"`, lastModified: clk.Now()}
 
-	data, err := s.Snapshot()
+	data, err := s.Snapshot(nil)
 	if err != nil {
 		t.Fatalf("Snapshot: %v", err)
 	}
@@ -52,7 +53,7 @@ func TestASnapshotKeepsBucketsObjectsVersionsAndUploads(t *testing.T) {
 	}
 
 	next := New(identity, clk, dir)
-	if err := next.Restore(data); err != nil {
+	if err := next.Restore(data, nil); err != nil {
 		t.Fatalf("Restore: %v", err)
 	}
 	b := next.buckets["docs"]
@@ -92,6 +93,52 @@ func TestASnapshotKeepsBucketsObjectsVersionsAndUploads(t *testing.T) {
 	}
 }
 
+// A bucket a manifest no longer keeps comes back neither in a snapshot nor
+// from one, and its bytes go.
+func TestSnapshotAndRestoreLeaveOutTheBucketsNotKept(t *testing.T) {
+	identity := awsapi.Identity{Account: awsapi.DefaultAccount, Region: awsapi.DefaultRegion}
+	clk := clock.NewFake(time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC))
+	dir := t.TempDir()
+	s := New(identity, clk, dir)
+	for _, name := range []string{"kept", "scratch"} {
+		if err := s.CreateBucket(name, BucketOptions{}); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.PutObject(name, "a.txt", []byte(name), ObjectOptions{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	onlyKept := func(name string) bool { return name == "kept" }
+	partial, err := s.Snapshot(onlyKept)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if next := New(identity, clk, t.TempDir()); next.Restore(partial, nil) != nil {
+		t.Fatal("Restore of a partial snapshot failed")
+	}
+	full, err := s.Snapshot(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	scratchFile := s.buckets["scratch"].current("a.txt").body.path
+	next := New(identity, clk, dir)
+	if err := next.Restore(full, onlyKept); err != nil {
+		t.Fatalf("Restore: %v", err)
+	}
+	if _, ok := next.buckets["scratch"]; ok {
+		t.Error("a bucket not kept came back")
+	}
+	if _, ok := next.buckets["kept"]; !ok {
+		t.Error("the kept bucket did not come back")
+	}
+	if _, err := os.Stat(scratchFile); !os.IsNotExist(err) {
+		t.Errorf("the bytes of a bucket not kept are still there: %v", err)
+	}
+	if !strings.Contains(string(partial), `"kept"`) || strings.Contains(string(partial), `"scratch"`) {
+		t.Errorf("a snapshot keeping only kept: %s", partial)
+	}
+}
+
 func TestRestoreDropsAVersionWhoseBytesAreGone(t *testing.T) {
 	identity := awsapi.Identity{Account: awsapi.DefaultAccount, Region: awsapi.DefaultRegion}
 	clk := clock.NewFake(time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC))
@@ -103,7 +150,7 @@ func TestRestoreDropsAVersionWhoseBytesAreGone(t *testing.T) {
 	if err := s.PutObject("docs", "a.txt", []byte("bytes"), ObjectOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	data, err := s.Snapshot()
+	data, err := s.Snapshot(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +158,7 @@ func TestRestoreDropsAVersionWhoseBytesAreGone(t *testing.T) {
 		t.Fatal(err)
 	}
 	next := New(identity, clk, dir)
-	if err := next.Restore(data); err != nil {
+	if err := next.Restore(data, nil); err != nil {
 		t.Fatalf("Restore: %v", err)
 	}
 	if o := next.buckets["docs"].current("a.txt"); o != nil {

@@ -29,11 +29,15 @@ type tableSnapshot struct {
 
 // Snapshot returns every table with its items, for Restore to bring back in
 // another emulator.
-func (s *Service) Snapshot() ([]byte, error) {
+// keep says which resources, by name, to include; nil includes every one.
+func (s *Service) Snapshot(keep func(name string) bool) ([]byte, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	snap := snapshot{Format: snapshotFormat, Tables: make([]tableSnapshot, 0, len(s.tables))}
-	for _, t := range s.tables {
+	for name, t := range s.tables {
+		if keep != nil && !keep(name) {
+			continue
+		}
 		snap.Tables = append(snap.Tables, tableSnapshot{
 			Spec: t.spec, ARN: t.arn, ID: t.id, CreatedAt: t.createdAt, TTL: t.ttl, Items: t.all(),
 		})
@@ -43,7 +47,9 @@ func (s *Service) Snapshot() ([]byte, error) {
 }
 
 // Restore replaces every table with those of a snapshot.
-func (s *Service) Restore(data []byte) error {
+// keep says which resources of the snapshot, by name, to bring back; nil brings every one.
+func (s *Service) Restore(data []byte, keep func(name string) bool) error {
+	kept := func(name string) bool { return keep == nil || keep(name) }
 	var snap snapshot
 	if err := json.Unmarshal(data, &snap); err != nil {
 		return fmt.Errorf("reading the DynamoDB state: %w", err)
@@ -53,6 +59,9 @@ func (s *Service) Restore(data []byte) error {
 	}
 	tables := make(map[string]*table, len(snap.Tables))
 	for _, ts := range snap.Tables {
+		if !kept(ts.Spec.Name) {
+			continue
+		}
 		t := newTable(ts.Spec, ts.ARN, ts.ID, ts.CreatedAt)
 		t.ttl = ts.TTL
 		for _, item := range ts.Items {
