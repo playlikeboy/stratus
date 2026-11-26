@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/ODudek/stratus/internal/awsapi"
 	"github.com/ODudek/stratus/internal/clock"
@@ -29,6 +30,10 @@ type Config struct {
 	// DataDir is the existing directory in which S3 keeps object bytes, in a
 	// directory of their own that Close removes. Empty: DefaultDataDir.
 	DataDir string
+	// TTLInterval is how often expired DynamoDB items are deleted in the
+	// background, as DynamoDB does. Zero: never by itself, only through
+	// ExpireTTL or POST /_stratus/expire-ttl, so tests stay deterministic.
+	TTLInterval time.Duration
 }
 
 // Server is one emulator. It is ready as soon as New returns: the manifest's
@@ -43,6 +48,9 @@ type Server struct {
 	gateway  *gateway.Gateway
 	control  *http.ServeMux
 	dataDir  string // this emulator's own directory of object bytes, removed by Close
+
+	closeOnce sync.Once
+	closed    chan struct{} // closed by Close; stops the background TTL expiry
 }
 
 func New(cfg Config) (*Server, error) {
@@ -77,9 +85,11 @@ func New(cfg Config) (*Server, error) {
 		gateway:  gateway.New(queues, streams, buckets, tables, machines).WithFallback(buckets),
 		control:  http.NewServeMux(),
 		dataDir:  dataDir,
+		closed:   make(chan struct{}),
 	}
 	s.control.HandleFunc("GET /_stratus/ready", s.handleReady)
 	s.control.HandleFunc("POST /_stratus/reset", s.handleReset)
+	s.control.HandleFunc("POST /_stratus/expire-ttl", s.handleExpireTTL)
 	// Kept so that health checks written for LocalStack keep working.
 	s.control.HandleFunc("GET /_localstack/health", s.handleLocalStackHealth)
 
@@ -87,8 +97,30 @@ func New(cfg Config) (*Server, error) {
 		_ = s.Close()
 		return nil, err
 	}
+	if cfg.TTLInterval > 0 {
+		go s.expireTTLEvery(cfg.TTLInterval)
+	}
 	return s, nil
 }
+
+// expireTTLEvery deletes the expired DynamoDB items every interval, as
+// DynamoDB does in the background, until Close.
+func (s *Server) expireTTLEvery(interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-s.closed:
+			return
+		case <-ticker.C:
+			s.targets.DynamoDB.ExpireTTL()
+		}
+	}
+}
+
+// ExpireTTL deletes the DynamoDB items whose TTL has passed and returns how
+// many it deleted.
+func (s *Server) ExpireTTL() int { return s.targets.DynamoDB.ExpireTTL() }
 
 // DefaultDataDir is where object bytes go when Config.DataDir is empty: a
 // directory on disk, never /tmp, which is a tmpfs held in memory on many
@@ -107,9 +139,10 @@ func DefaultDataDir() string {
 	return os.TempDir()
 }
 
-// Close removes the object bytes the emulator kept on disk. The emulator
-// must not serve requests after it.
+// Close stops the background TTL expiry and removes the object bytes the
+// emulator kept on disk. The emulator must not serve requests after it.
 func (s *Server) Close() error {
+	s.closeOnce.Do(func() { close(s.closed) })
 	return os.RemoveAll(s.dataDir)
 }
 
@@ -150,6 +183,10 @@ func (s *Server) handleReset(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleExpireTTL(w http.ResponseWriter, _ *http.Request) {
+	awsapi.WriteJSON(w, "application/json", http.StatusOK, map[string]int{"deleted": s.ExpireTTL()})
 }
 
 func (s *Server) handleLocalStackHealth(w http.ResponseWriter, _ *http.Request) {
