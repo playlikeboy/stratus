@@ -94,37 +94,59 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
-	// No read or write timeout: a long-polling receive is a slow request by design.
-	httpServer := &http.Server{Handler: emulator, ReadHeaderTimeout: 10 * time.Second}
-	served := make(chan error, 2)
-	go func() { served <- httpServer.Serve(listener) }()
+	// HTTPS listens before anything is served, so a client that saw
+	// /_stratus/ready over HTTP finds HTTPS listening too.
+	var secure net.Listener
+	var tlsConfig *tls.Config
 	if *tlsListen != "" {
 		cert, err := https.certificate()
 		if err != nil {
 			return err
 		}
-		secure, err := (&net.ListenConfig{}).Listen(ctx, "tcp", *tlsListen)
-		if err != nil {
+		if secure, err = (&net.ListenConfig{}).Listen(ctx, "tcp", *tlsListen); err != nil {
 			return err
 		}
-		httpServer.TLSConfig = &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12}
-		go func() { served <- httpServer.ServeTLS(secure, "", "") }()
+		tlsConfig = &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12}
 		slog.Info("stratus serves HTTPS", "listen", secure.Addr().String())
 	}
 	slog.Info("stratus is ready", "version", version, "listen", listener.Addr().String(), "region", *region, "manifest", *manifestPath, "stateDir", *stateDir)
+	return serve(ctx, emulator, listener, secure, tlsConfig)
+}
+
+// serve answers on listener, and over HTTPS on secure when it is not nil,
+// until ctx is done. Each listener has an http.Server of its own: one server
+// serving both sets HTTP/2 up once, for whichever starts first, and when that
+// was the plain one, HTTPS announced HTTP/2 it then could not serve.
+func serve(ctx context.Context, handler http.Handler, listener, secure net.Listener, tlsConfig *tls.Config) error {
+	// No read or write timeout: a long-polling receive is a slow request by design.
+	plain := &http.Server{Handler: handler, ReadHeaderTimeout: 10 * time.Second}
+	servers := []*http.Server{plain}
+	served := make(chan error, 2)
+	go func() { served <- plain.Serve(listener) }()
+	if secure != nil {
+		s := &http.Server{Handler: handler, ReadHeaderTimeout: 10 * time.Second, TLSConfig: tlsConfig}
+		servers = append(servers, s)
+		go func() { served <- s.ServeTLS(secure, "", "") }()
+	}
 
 	select {
 	case err := <-served:
+		for _, s := range servers {
+			_ = s.Close()
+		}
 		return err
 	case <-ctx.Done():
 	}
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
-	if err := httpServer.Shutdown(shutdownCtx); err != nil {
-		// Long-polling receivers are still open: cut them.
-		return httpServer.Close()
+	var errs []error
+	for _, s := range servers {
+		if err := s.Shutdown(shutdownCtx); err != nil {
+			// Long-polling receivers are still open: cut them.
+			errs = append(errs, s.Close())
+		}
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 // checkReady is the container health check: the image has no shell or curl.
