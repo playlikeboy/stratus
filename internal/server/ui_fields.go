@@ -3,6 +3,7 @@ package server
 import (
 	"strconv"
 	"strings"
+	"sync/atomic"
 )
 
 // Every form control of the UI is one component, the "field" template: a
@@ -84,3 +85,22 @@ func withEmpty(empty string, cs []choice) []choice {
 }
 
 var keyTypeChoices = []choice{{"S", "String"}, {"N", "Number"}, {"B", "Binary"}}
+
+// Chosen is the choice the field's value names, or the first one.
+func (f uiField) Chosen() choice {
+	for _, c := range f.Choices {
+		if c.Value == f.Value {
+			return c
+		}
+	}
+	if len(f.Choices) > 0 {
+		return f.Choices[0]
+	}
+	return choice{}
+}
+
+var uidSeq atomic.Uint64
+
+// uid is an id unique across every page the server renders, for the ARIA
+// links between a dropdown's label, button and options.
+func uid() string { return "dd" + strconv.FormatUint(uidSeq.Add(1), 36) }

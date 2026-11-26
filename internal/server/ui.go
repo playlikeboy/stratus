@@ -18,7 +18,7 @@ import (
 // The web UI: one page that htmx refreshes with server-rendered fragments.
 // It needs no build step and no network: htmx is embedded.
 
-//go:embed ui/fields.html ui/page.html ui/resources.html ui/detail.html ui/style.css ui/htmx-2.0.4.min.js
+//go:embed ui/fields.html ui/dropdown.js ui/page.html ui/resources.html ui/detail.html ui/style.css ui/htmx-2.0.4.min.js
 var uiFiles embed.FS
 
 var uiTemplates = template.Must(template.New("").Funcs(template.FuncMap{
@@ -29,6 +29,7 @@ var uiTemplates = template.Must(template.New("").Funcs(template.FuncMap{
 	"hasPrefix": strings.HasPrefix,
 	"hasSuffix": strings.HasSuffix,
 	"len64":     func(b []byte) int64 { return int64(len(b)) },
+	"uid":       uid,
 	"field":     field,
 	"val":       val,
 	"choose":    choose,
@@ -40,13 +41,14 @@ var uiTemplates = template.Must(template.New("").Funcs(template.FuncMap{
 		}
 		return choices("None", names)
 	},
-	"keyTypes":     func() []choice { return keyTypeChoices },
-	"statusFilter": func() []choice { return withEmpty("Any status", executionStatuses) },
-	"keyType":      keyType,
-	"projection":   projection,
-	"status":       statusLabel,
-	"retention":    retention,
-	"enum":         humanEnum,
+	"resourceTypes": func() []choice { return resourceTypes },
+	"keyTypes":      func() []choice { return keyTypeChoices },
+	"statusFilter":  func() []choice { return withEmpty("Any status", executionStatuses) },
+	"keyType":       keyType,
+	"projection":    projection,
+	"status":        statusLabel,
+	"retention":     retention,
+	"enum":          humanEnum,
 }).ParseFS(uiFiles, "ui/fields.html", "ui/page.html", "ui/resources.html", "ui/detail.html"))
 
 func (s *Server) registerUI() {
@@ -55,8 +57,10 @@ func (s *Server) registerUI() {
 	})
 	s.control.HandleFunc("GET /_stratus/ui", s.handleUIPage)
 	s.control.HandleFunc("GET /_stratus/ui/htmx.min.js", serveUIFile("ui/htmx-2.0.4.min.js", "text/javascript; charset=utf-8"))
+	s.control.HandleFunc("GET /_stratus/ui/dropdown.js", serveUIFile("ui/dropdown.js", "text/javascript; charset=utf-8"))
 	s.control.HandleFunc("GET /_stratus/ui/style.css", serveUIFile("ui/style.css", "text/css; charset=utf-8"))
 	s.control.HandleFunc("GET /_stratus/ui/resources", s.handleUIResources)
+	s.control.HandleFunc("GET /_stratus/ui/create-form", s.handleUICreateForm)
 	s.registerUIDetails()
 	s.control.HandleFunc("POST /_stratus/ui/reset", s.uiAction(func(*http.Request) (string, error) {
 		if err := s.Reset(); err != nil {
@@ -125,8 +129,24 @@ func (s *Server) renderResources(w http.ResponseWriter, notice string) {
 	_ = uiTemplates.ExecuteTemplate(w, "resources.html", s.overview(notice))
 }
 
+// handleUICreateForm answers with the settings of the kind of resource
+// chosen in the create panel.
+func (s *Server) handleUICreateForm(w http.ResponseWriter, r *http.Request) {
+	o := s.overview("")
+	o.Kind = r.URL.Query().Get("type")
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_ = uiTemplates.ExecuteTemplate(w, "create-form", o)
+}
+
+// resourceTypes are the kinds of resource the create panel makes.
+var resourceTypes = []choice{
+	{"", "Choose a type"}, {"queue", "SQS queue"}, {"stream", "Kinesis stream"}, {"bucket", "S3 bucket"},
+	{"table", "DynamoDB table"}, {"machine", "Step Functions state machine"},
+}
+
 // overview is everything the UI shows.
 type overview struct {
+	Kind     string // the kind chosen in the create panel
 	Notice   string
 	Region   string
 	Account  string
