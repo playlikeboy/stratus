@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ODudek/stratus/internal/awsapi"
-	"github.com/ODudek/stratus/internal/manifest"
-	"github.com/ODudek/stratus/internal/server"
+	"github.com/stratus-emulator/stratus/internal/awsapi"
+	"github.com/stratus-emulator/stratus/internal/manifest"
+	"github.com/stratus-emulator/stratus/internal/server"
 )
 
 // Fixed identity of every emulator; clients may use any credentials.

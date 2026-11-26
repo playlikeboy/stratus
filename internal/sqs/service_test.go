@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ODudek/stratus/internal/awsapi"
-	"github.com/ODudek/stratus/internal/clock"
+	"github.com/stratus-emulator/stratus/internal/awsapi"
+	"github.com/stratus-emulator/stratus/internal/clock"
 )
 
 var testIdentity = awsapi.Identity{Account: awsapi.DefaultAccount, Region: awsapi.DefaultRegion}

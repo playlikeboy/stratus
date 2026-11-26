@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/ODudek/stratus/internal/awsapi"
+	"github.com/stratus-emulator/stratus/internal/awsapi"
 )
 
 // Service is one emulated AWS service.

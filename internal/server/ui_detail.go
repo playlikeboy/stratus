@@ -11,11 +11,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ODudek/stratus/internal/dynamodb"
-	"github.com/ODudek/stratus/internal/kinesis"
-	"github.com/ODudek/stratus/internal/s3"
-	"github.com/ODudek/stratus/internal/sfn"
-	"github.com/ODudek/stratus/internal/sqs"
+	"github.com/stratus-emulator/stratus/internal/dynamodb"
+	"github.com/stratus-emulator/stratus/internal/kinesis"
+	"github.com/stratus-emulator/stratus/internal/s3"
+	"github.com/stratus-emulator/stratus/internal/sfn"
+	"github.com/stratus-emulator/stratus/internal/sqs"
 )
 
 // How much a detail page shows: enough to look at, little enough to render

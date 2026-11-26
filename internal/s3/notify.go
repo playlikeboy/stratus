@@ -8,7 +8,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/ODudek/stratus/internal/awsapi"
+	"github.com/stratus-emulator/stratus/internal/awsapi"
 )
 
 // The event names of the notifications this emulator sends.

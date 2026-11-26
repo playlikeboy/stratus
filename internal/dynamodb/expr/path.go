@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ODudek/stratus/internal/dynamodb/attr"
+	"github.com/stratus-emulator/stratus/internal/dynamodb/attr"
 )
 
 // Step is one element of a document path: a map key, or a list index.

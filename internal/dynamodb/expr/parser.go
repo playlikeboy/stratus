@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ODudek/stratus/internal/dynamodb/attr"
+	"github.com/stratus-emulator/stratus/internal/dynamodb/attr"
 )
 
 // Context holds the placeholders of one request and records which of them its

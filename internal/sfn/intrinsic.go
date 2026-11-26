@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ODudek/stratus/internal/awsapi"
+	"github.com/stratus-emulator/stratus/internal/awsapi"
 )
 
 // expr is a value computed from the state input and the context object: a

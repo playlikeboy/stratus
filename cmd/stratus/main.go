@@ -17,9 +17,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ODudek/stratus/internal/awsapi"
-	"github.com/ODudek/stratus/internal/manifest"
-	"github.com/ODudek/stratus/internal/server"
+	"github.com/stratus-emulator/stratus/internal/awsapi"
+	"github.com/stratus-emulator/stratus/internal/manifest"
+	"github.com/stratus-emulator/stratus/internal/server"
 )
 
 const shutdownTimeout = 5 * time.Second
@@ -31,8 +31,12 @@ func main() {
 	}
 }
 
+// version is the release, set when the binary is built: -ldflags "-X main.version=v1.2.3".
+var version = "dev"
+
 func run(args []string) error {
 	flags := flag.NewFlagSet("stratus", flag.ContinueOnError)
+	showVersion := flags.Bool("version", false, "print the version and exit")
 	listen := flags.String("listen", ":4566", "address to listen on")
 	manifestPath := flags.String("manifest", "", "YAML file with the resources to create at start")
 	region := flags.String("region", awsapi.DefaultRegion, "region of every resource")
@@ -51,6 +55,10 @@ func run(args []string) error {
 			return nil
 		}
 		return err
+	}
+	if *showVersion {
+		fmt.Println("stratus", version)
+		return nil
 	}
 	if *healthcheck {
 		return checkReady(*listen)
@@ -99,7 +107,7 @@ func run(args []string) error {
 		go func() { served <- httpServer.ServeTLS(secure, "", "") }()
 		slog.Info("stratus serves HTTPS", "listen", secure.Addr().String())
 	}
-	slog.Info("stratus is ready", "listen", listener.Addr().String(), "region", *region, "manifest", *manifestPath)
+	slog.Info("stratus is ready", "version", version, "listen", listener.Addr().String(), "region", *region, "manifest", *manifestPath)
 
 	select {
 	case err := <-served:

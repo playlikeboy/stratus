@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ODudek/stratus/internal/awsapi"
+	"github.com/stratus-emulator/stratus/internal/awsapi"
 )
 
 // The legacy query protocol is served by translating a request into the JSON

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ODudek/stratus/internal/awsapi"
+	"github.com/stratus-emulator/stratus/internal/awsapi"
 )
 
 // maxPresignExpiry is the longest validity a presigned URL may have: 7 days.

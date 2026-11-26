@@ -11,15 +11,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ODudek/stratus/internal/awsapi"
-	"github.com/ODudek/stratus/internal/clock"
-	"github.com/ODudek/stratus/internal/dynamodb"
-	"github.com/ODudek/stratus/internal/gateway"
-	"github.com/ODudek/stratus/internal/kinesis"
-	"github.com/ODudek/stratus/internal/manifest"
-	"github.com/ODudek/stratus/internal/s3"
-	"github.com/ODudek/stratus/internal/sfn"
-	"github.com/ODudek/stratus/internal/sqs"
+	"github.com/stratus-emulator/stratus/internal/awsapi"
+	"github.com/stratus-emulator/stratus/internal/clock"
+	"github.com/stratus-emulator/stratus/internal/dynamodb"
+	"github.com/stratus-emulator/stratus/internal/gateway"
+	"github.com/stratus-emulator/stratus/internal/kinesis"
+	"github.com/stratus-emulator/stratus/internal/manifest"
+	"github.com/stratus-emulator/stratus/internal/s3"
+	"github.com/stratus-emulator/stratus/internal/sfn"
+	"github.com/stratus-emulator/stratus/internal/sqs"
 )
 
 // Config is what an emulator is built from. Zero fields take the defaults.

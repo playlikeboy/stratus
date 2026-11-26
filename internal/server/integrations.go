@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ODudek/stratus/internal/awsapi"
-	"github.com/ODudek/stratus/internal/sfn"
-	"github.com/ODudek/stratus/internal/sqs"
+	"github.com/stratus-emulator/stratus/internal/awsapi"
+	"github.com/stratus-emulator/stratus/internal/sfn"
+	"github.com/stratus-emulator/stratus/internal/sqs"
 )
 
 const sqsSendMessageResource = "arn:aws:states:::sqs:sendMessage"

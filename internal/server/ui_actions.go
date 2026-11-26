@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ODudek/stratus/internal/sqs"
+	"github.com/stratus-emulator/stratus/internal/sqs"
 )
 
 // maxUpload is how much of an uploaded file is held in memory while the

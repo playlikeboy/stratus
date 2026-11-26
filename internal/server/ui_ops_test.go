@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ODudek/stratus/internal/manifest"
+	"github.com/stratus-emulator/stratus/internal/manifest"
 )
 
 const opsManifest = `

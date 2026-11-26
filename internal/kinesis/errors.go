@@ -3,7 +3,7 @@ package kinesis
 import (
 	"net/http"
 
-	"github.com/ODudek/stratus/internal/awsapi"
+	"github.com/stratus-emulator/stratus/internal/awsapi"
 )
 
 // Every Kinesis error is an HTTP 400 whose "__type" is the bare shape name.

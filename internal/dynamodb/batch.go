@@ -1,7 +1,7 @@
 package dynamodb
 
 import (
-	"github.com/ODudek/stratus/internal/dynamodb/attr"
+	"github.com/stratus-emulator/stratus/internal/dynamodb/attr"
 )
 
 const (

@@ -1,5 +1,13 @@
 # stratus
 
+[![ci](https://github.com/stratus-emulator/stratus/actions/workflows/ci.yml/badge.svg)](https://github.com/stratus-emulator/stratus/actions/workflows/ci.yml)
+[![Docker Hub](https://img.shields.io/docker/v/stratusemulator/stratus?sort=semver&label=docker)](https://hub.docker.com/r/stratusemulator/stratus)
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
+
+```sh
+docker run --rm -p 4566:4566 stratusemulator/stratus
+```
+
 A local emulator of the AWS services an application needs in development and
 end-to-end tests. One static Go binary, ready in milliseconds; S3 object bytes are kept on disk,
 all other state in memory.
@@ -43,14 +51,25 @@ restart: buckets and object metadata are in memory.
 
 ## Run
 
-```sh
-make build
-./bin/stratus -manifest examples/manifest.yaml
-```
+The image is on Docker Hub as `stratusemulator/stratus` and on GHCR as
+`ghcr.io/stratus-emulator/stratus`, for `linux/amd64` and `linux/arm64`. Tags: a release's version
+(`1.2.3`, `1.2`, `1`), `latest` for the newest release, `edge` for `main`.
 
 ```sh
-docker build -t stratus .
-docker run --rm -p 4566:4566 -v "$PWD/examples/manifest.yaml:/manifest.yaml:ro" stratus -manifest /manifest.yaml
+docker run --rm -p 4566:4566 \
+  -v "$PWD/examples/manifest.yaml:/manifest.yaml:ro" \
+  stratusemulator/stratus -manifest /manifest.yaml
+```
+
+The image runs as an unprivileged user (uid 65532) and keeps S3 object bytes in `/data`. A
+named or anonymous volume there works as it is (`-v stratus-data:/data`); a directory of the host
+needs to be writable by that uid, or run the container with `--user "$(id -u)"`.
+
+From source, with Go:
+
+```sh
+go install github.com/stratus-emulator/stratus/cmd/stratus@latest
+stratus -manifest examples/manifest.yaml
 ```
 
 Point a client at it with any credentials:
@@ -63,6 +82,7 @@ aws --endpoint-url http://localhost:4566 sqs list-queues
 | Flag | Default | Meaning |
 |---|---|---|
 | `-listen` | `:4566` | address to listen on |
+| `-version` | | print the version and exit |
 | `-manifest` | none | YAML file with the resources to create at start |
 | `-region` | `eu-central-1` | region of every resource |
 | `-account` | `000000000000` | account id of every resource |
@@ -228,3 +248,13 @@ errors. None of it has been compared against live AWS yet.
 Layout: `cmd/stratus` is the binary, `internal/gateway` routes requests, each service lives in
 `internal/<service>`, `internal/manifest` reads the resource manifest and `internal/server` puts
 them together.
+
+## Contributing
+
+Issues and pull requests are welcome: read the
+[contributing guide](https://github.com/stratus-emulator/.github/blob/main/CONTRIBUTING.md) first,
+and report security problems privately as its [security policy](https://github.com/stratus-emulator/.github/blob/main/SECURITY.md) says.
+
+## License
+
+Apache License 2.0: see [LICENSE](LICENSE) and [NOTICE](NOTICE).

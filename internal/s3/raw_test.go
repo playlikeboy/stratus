@@ -8,8 +8,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/ODudek/stratus/internal/clock"
-	"github.com/ODudek/stratus/internal/s3"
+	"github.com/stratus-emulator/stratus/internal/clock"
+	"github.com/stratus-emulator/stratus/internal/s3"
 )
 
 // placeholderAuth is the unsigned Authorization header a hand-written client

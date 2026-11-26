@@ -16,10 +16,10 @@ import (
 	awssfn "github.com/aws/aws-sdk-go-v2/service/sfn"
 	"github.com/aws/aws-sdk-go-v2/service/sfn/types"
 
-	"github.com/ODudek/stratus/internal/awsapi"
-	"github.com/ODudek/stratus/internal/clock"
-	"github.com/ODudek/stratus/internal/gateway"
-	"github.com/ODudek/stratus/internal/sfn"
+	"github.com/stratus-emulator/stratus/internal/awsapi"
+	"github.com/stratus-emulator/stratus/internal/clock"
+	"github.com/stratus-emulator/stratus/internal/gateway"
+	"github.com/stratus-emulator/stratus/internal/sfn"
 )
 
 const sendResource = "arn:aws:states:::sqs:sendMessage"

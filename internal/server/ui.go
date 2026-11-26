@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ODudek/stratus/internal/dynamodb"
-	"github.com/ODudek/stratus/internal/kinesis"
-	"github.com/ODudek/stratus/internal/s3"
-	"github.com/ODudek/stratus/internal/sfn"
+	"github.com/stratus-emulator/stratus/internal/dynamodb"
+	"github.com/stratus-emulator/stratus/internal/kinesis"
+	"github.com/stratus-emulator/stratus/internal/s3"
+	"github.com/stratus-emulator/stratus/internal/sfn"
 )
 
 // The web UI: one page that htmx refreshes with server-rendered fragments.

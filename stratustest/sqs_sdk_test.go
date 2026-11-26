@@ -13,7 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
 
-	"github.com/ODudek/stratus/stratustest"
+	"github.com/stratus-emulator/stratus/stratustest"
 )
 
 const manifest = `

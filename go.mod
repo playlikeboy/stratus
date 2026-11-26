@@ -1,4 +1,4 @@
-module github.com/ODudek/stratus
+module github.com/stratus-emulator/stratus
 
 go 1.27.4
 

@@ -3,7 +3,7 @@ package dynamodb
 import (
 	"slices"
 
-	"github.com/ODudek/stratus/internal/dynamodb/attr"
+	"github.com/stratus-emulator/stratus/internal/dynamodb/attr"
 )
 
 // The wire shapes of table descriptions, shared by requests and responses.

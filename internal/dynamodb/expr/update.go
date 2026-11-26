@@ -3,7 +3,7 @@ package expr
 import (
 	"strings"
 
-	"github.com/ODudek/stratus/internal/dynamodb/attr"
+	"github.com/stratus-emulator/stratus/internal/dynamodb/attr"
 )
 
 const updateKind = "UpdateExpression"

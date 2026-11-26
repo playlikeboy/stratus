@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ODudek/stratus/internal/awsapi"
+	"github.com/stratus-emulator/stratus/internal/awsapi"
 )
 
 // runTask runs a Task state with its Retry and Catch policies.

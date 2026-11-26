@@ -4,7 +4,7 @@ import (
 	"cmp"
 	"slices"
 
-	"github.com/ODudek/stratus/internal/dynamodb/attr"
+	"github.com/stratus-emulator/stratus/internal/dynamodb/attr"
 )
 
 // Apply returns the item the update makes of item; item itself is left

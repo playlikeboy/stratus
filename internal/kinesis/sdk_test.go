@@ -19,10 +19,10 @@ import (
 	sdk "github.com/aws/aws-sdk-go-v2/service/kinesis"
 	"github.com/aws/aws-sdk-go-v2/service/kinesis/types"
 
-	"github.com/ODudek/stratus/internal/awsapi"
-	"github.com/ODudek/stratus/internal/clock"
-	"github.com/ODudek/stratus/internal/gateway"
-	"github.com/ODudek/stratus/internal/kinesis"
+	"github.com/stratus-emulator/stratus/internal/awsapi"
+	"github.com/stratus-emulator/stratus/internal/clock"
+	"github.com/stratus-emulator/stratus/internal/gateway"
+	"github.com/stratus-emulator/stratus/internal/kinesis"
 )
 
 var start = time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)

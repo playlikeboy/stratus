@@ -10,7 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sfn"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 
-	"github.com/ODudek/stratus/stratustest"
+	"github.com/stratus-emulator/stratus/stratustest"
 )
 
 // A state machine that waits, then sends its input's payload to a queue.

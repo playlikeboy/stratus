@@ -1,0 +1,6 @@
+stratus
+Copyright 2026 The stratus authors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+It includes htmx 2.0.4 (https://htmx.org) under the Zero-Clause BSD license,
+in internal/server/ui/htmx-2.0.4.min.js.

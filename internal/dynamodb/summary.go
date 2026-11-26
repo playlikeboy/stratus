@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ODudek/stratus/internal/dynamodb/attr"
+	"github.com/stratus-emulator/stratus/internal/dynamodb/attr"
 )
 
 // TableSummary is what an overview of the emulator shows of a table.
