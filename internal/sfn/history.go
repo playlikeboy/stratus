@@ -54,8 +54,16 @@ func (ev event) wire() map[string]any {
 	return out
 }
 
-func (e *execution) stateEntered(st *state, input any) {
-	e.add(st.typ+"StateEntered", "stateEnteredEventDetails",
+// stateEntered records that a running execution entered st at entered, and
+// remembers where it is, for a snapshot to resume it there.
+func (e *execution) stateEntered(st *state, input any, entered time.Time) {
+	e.s.mu.Lock()
+	defer e.s.mu.Unlock()
+	if e.status != statusRunning {
+		return
+	}
+	e.at = position{state: st.name, input: input, entered: entered}
+	e.addLocked(st.typ+"StateEntered", "stateEnteredEventDetails",
 		map[string]any{"name": st.name, "input": encodeJSON(input), "inputDetails": map[string]any{"truncated": false}})
 }
 

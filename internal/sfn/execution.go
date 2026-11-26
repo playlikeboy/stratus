@@ -31,6 +31,14 @@ type execution struct {
 	errName string
 	cause   string
 	history []event
+	at      position // the state a running execution is in
+}
+
+// position is the state an execution entered last, with its input and when.
+type position struct {
+	state   string // empty before the first state
+	input   any
+	entered time.Time
 }
 
 // StartExecution starts an execution of the machine with the given ARN and

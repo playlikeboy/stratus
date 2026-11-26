@@ -15,9 +15,14 @@ type outcome struct {
 
 // run walks the machine from StartAt until a terminal state, a failure, a
 // stop or a reset. It is the body of the execution's goroutine.
-func (e *execution) run() {
+func (e *execution) run() { e.runFrom(e.m.def.startAt, e.input, time.Time{}) }
+
+// runFrom walks the machine from the state name, given input. A zero resumed
+// enters that state now; otherwise the execution was restored in it, entered
+// at resumed: its StateEntered event is already in the history, and a Wait
+// ends when it would have, not a full wait after the restore.
+func (e *execution) runFrom(name string, input any, resumed time.Time) {
 	defer close(e.done)
-	name, input := e.m.def.startAt, e.input
 	for {
 		if e.ctx.Err() != nil {
 			return
@@ -32,7 +37,8 @@ func (e *execution) run() {
 			e.finish(statusFailed, "", errRuntime, "The execution reached the maximum number of history events (25000).")
 			return
 		}
-		out, err := e.runState(e.m.def.states[name], input)
+		out, err := e.runState(e.m.def.states[name], input, resumed)
+		resumed = time.Time{}
 		if err != nil {
 			e.fail(err)
 			return
@@ -60,9 +66,12 @@ func (e *execution) fail(err error) {
 	}
 }
 
-func (e *execution) runState(st *state, input any) (outcome, error) {
-	entered := e.s.clock.Now()
-	e.stateEntered(st, input)
+func (e *execution) runState(st *state, input any, resumed time.Time) (outcome, error) {
+	entered := resumed
+	if entered.IsZero() {
+		entered = e.s.clock.Now()
+		e.stateEntered(st, input, entered)
+	}
 	var (
 		out outcome
 		err error
