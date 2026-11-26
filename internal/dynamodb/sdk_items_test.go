@@ -100,9 +100,15 @@ func TestSDKUpdateItem(t *testing.T) {
 	h.createOrders(t)
 	ctx := t.Context()
 	update := func(expr string, rv types.ReturnValue, vals map[string]types.AttributeValue) (*sdk.UpdateItemOutput, error) {
-		var names map[string]string
+		names := map[string]string{}
 		if strings.Contains(expr, "#s") {
-			names = map[string]string{"#s": "status"}
+			names["#s"] = "status"
+		}
+		if strings.Contains(expr, "#t") {
+			names["#t"] = "total"
+		}
+		if len(names) == 0 {
+			names = nil
 		}
 		return h.client.UpdateItem(ctx, &sdk.UpdateItemInput{
 			TableName: aws.String("orders"), Key: orderKey("c", "1"),
@@ -110,7 +116,7 @@ func TestSDKUpdateItem(t *testing.T) {
 			ExpressionAttributeNames: names,
 		})
 	}
-	out, err := update("SET #s = :s, total = if_not_exists(total, :zero) + :inc, tags = :tags",
+	out, err := update("SET #s = :s, #t = if_not_exists(#t, :zero) + :inc, tags = :tags",
 		types.ReturnValueAllNew, map[string]types.AttributeValue{
 			":s": str("open"), ":zero": num("0"), ":inc": num("2.5"),
 			":tags": &types.AttributeValueMemberL{Value: []types.AttributeValue{str("a")}},
@@ -121,7 +127,7 @@ func TestSDKUpdateItem(t *testing.T) {
 	if getN(t, out.Attributes, "total") != "2.5" || getS(t, out.Attributes, "customer") != "c" {
 		t.Errorf("ALL_NEW = %v", out.Attributes)
 	}
-	out, err = update("SET tags = list_append(tags, :more), total = total - :one ADD seen :set REMOVE #s",
+	out, err = update("SET tags = list_append(tags, :more), #t = #t - :one ADD seen :set REMOVE #s",
 		types.ReturnValueUpdatedOld, map[string]types.AttributeValue{
 			":more": &types.AttributeValueMemberL{Value: []types.AttributeValue{str("b")}},
 			":one":  num("1"), ":set": &types.AttributeValueMemberSS{Value: []string{"x"}},
@@ -145,7 +151,7 @@ func TestSDKUpdateItem(t *testing.T) {
 	wantAPIError(t, err, "ValidationException", "Cannot update attribute customer. This attribute is part of the key")
 	_, err = update("SET a = :s", types.ReturnValueNone, map[string]types.AttributeValue{":s": str("x"), ":extra": str("y")})
 	wantAPIError(t, err, "ValidationException", "ExpressionAttributeValues unused in expressions: keys: {:extra}")
-	_, err = update("SET #s = :s, total = :s", types.ReturnValueNone, map[string]types.AttributeValue{":s": str("x")})
+	_, err = update("SET #s = :s, #t = :s", types.ReturnValueNone, map[string]types.AttributeValue{":s": str("x")})
 	wantAPIError(t, err, "ValidationException", "Type mismatch for Index Key total Expected: N Actual: S")
 	_, err = update("SET #s = #s + :s", types.ReturnValueNone, map[string]types.AttributeValue{":s": num("1")})
 	wantAPIError(t, err, "ValidationException", "refers to an attribute that does not exist in the item")
@@ -172,9 +178,9 @@ func TestSDKConditionalWrites(t *testing.T) {
 
 	_, err = h.client.UpdateItem(ctx, &sdk.UpdateItemInput{
 		TableName: aws.String("orders"), Key: orderKey("c", "1"),
-		UpdateExpression:          aws.String("SET total = total + :one"),
+		UpdateExpression:          aws.String("SET #t = #t + :one"),
 		ConditionExpression:       aws.String("#s = :closed"),
-		ExpressionAttributeNames:  map[string]string{"#s": "status"},
+		ExpressionAttributeNames:  map[string]string{"#s": "status", "#t": "total"},
 		ExpressionAttributeValues: map[string]types.AttributeValue{":one": num("1"), ":closed": str("closed")},
 	})
 	if !errors.As(err, &failed) || failed.Item != nil {
@@ -183,7 +189,8 @@ func TestSDKConditionalWrites(t *testing.T) {
 
 	_, err = h.client.DeleteItem(ctx, &sdk.DeleteItemInput{
 		TableName: aws.String("orders"), Key: orderKey("c", "1"),
-		ConditionExpression:       aws.String("total BETWEEN :lo AND :hi AND begins_with(note, :n)"),
+		ConditionExpression:       aws.String("#t BETWEEN :lo AND :hi AND begins_with(note, :n)"),
+		ExpressionAttributeNames:  map[string]string{"#t": "total"},
 		ExpressionAttributeValues: map[string]types.AttributeValue{":lo": num("5"), ":hi": num("15"), ":n": str("n-")},
 	})
 	if err != nil {
@@ -228,4 +235,34 @@ func TestSDKKeyAndItemValidation(t *testing.T) {
 		ConditionExpression: aws.String("attribute_exists(#x) AND"),
 	})
 	wantAPIError(t, err, "ValidationException", "Invalid ConditionExpression: Syntax error")
+
+	// Reserved words are rejected across expressions unless aliased via ExpressionAttributeNames.
+	_, err = h.client.UpdateItem(ctx, &sdk.UpdateItemInput{
+		TableName:                 aws.String("orders"),
+		Key:                       orderKey("c", "1"),
+		UpdateExpression:          aws.String("SET status = :s"),
+		ExpressionAttributeValues: map[string]types.AttributeValue{":s": str("open")},
+	})
+	wantAPIError(t, err, "ValidationException", "Attribute name is a reserved keyword; reserved keyword: status")
+
+	_, err = h.client.GetItem(ctx, &sdk.GetItemInput{
+		TableName:            aws.String("orders"),
+		Key:                  orderKey("c", "1"),
+		ProjectionExpression: aws.String("status"),
+	})
+	wantAPIError(t, err, "ValidationException", "Attribute name is a reserved keyword; reserved keyword: status")
+
+	h.put(t, "orders", order("c", "1", "10", "open"))
+	got, err := h.client.GetItem(ctx, &sdk.GetItemInput{
+		TableName:                aws.String("orders"),
+		Key:                      orderKey("c", "1"),
+		ProjectionExpression:     aws.String("#s"),
+		ExpressionAttributeNames: map[string]string{"#s": "status"},
+	})
+	if err != nil {
+		t.Fatalf("GetItem with ExpressionAttributeNames for reserved word: %v", err)
+	}
+	if getS(t, got.Item, "status") != "open" {
+		t.Errorf("GetItem #s->status = %v, want status=open", got.Item)
+	}
 }

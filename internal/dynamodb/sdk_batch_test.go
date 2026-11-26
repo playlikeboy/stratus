@@ -72,7 +72,8 @@ func TestSDKTransactions(t *testing.T) {
 		{Put: &types.Put{TableName: aws.String("orders"), Item: order("c", "3", "30", "open"),
 			ConditionExpression: aws.String("attribute_not_exists(customer)")}},
 		{Update: &types.Update{TableName: aws.String("orders"), Key: orderKey("c", "1"),
-			UpdateExpression:          aws.String("SET total = total + :n"),
+			UpdateExpression:          aws.String("SET #t = #t + :n"),
+			ExpressionAttributeNames:  map[string]string{"#t": "total"},
 			ExpressionAttributeValues: map[string]types.AttributeValue{":n": num("5")}}},
 		{Delete: &types.Delete{TableName: aws.String("orders"), Key: orderKey("c", "2")}},
 		{ConditionCheck: &types.ConditionCheck{TableName: aws.String("orders"), Key: orderKey("c", "9"),
@@ -84,10 +85,12 @@ func TestSDKTransactions(t *testing.T) {
 
 	_, err = h.client.TransactWriteItems(ctx, &sdk.TransactWriteItemsInput{TransactItems: []types.TransactWriteItem{
 		{Update: &types.Update{TableName: aws.String("orders"), Key: orderKey("c", "3"),
-			UpdateExpression:          aws.String("SET total = :zero"),
+			UpdateExpression:          aws.String("SET #t = :zero"),
+			ExpressionAttributeNames:  map[string]string{"#t": "total"},
 			ExpressionAttributeValues: map[string]types.AttributeValue{":zero": num("0")}}},
 		{ConditionCheck: &types.ConditionCheck{TableName: aws.String("orders"), Key: orderKey("c", "1"),
-			ConditionExpression:                 aws.String("total = :ten"),
+			ConditionExpression:                 aws.String("#t = :ten"),
+			ExpressionAttributeNames:            map[string]string{"#t": "total"},
 			ExpressionAttributeValues:           map[string]types.AttributeValue{":ten": num("10")},
 			ReturnValuesOnConditionCheckFailure: types.ReturnValuesOnConditionCheckFailureAllOld}},
 		{Update: &types.Update{TableName: aws.String("orders"), Key: orderKey("c", "4"),
@@ -112,7 +115,7 @@ func TestSDKTransactions(t *testing.T) {
 	got, err := h.client.TransactGetItems(ctx, &sdk.TransactGetItemsInput{TransactItems: []types.TransactGetItem{
 		{Get: &types.Get{TableName: aws.String("orders"), Key: orderKey("c", "3")}},
 		{Get: &types.Get{TableName: aws.String("orders"), Key: orderKey("c", "2")}},
-		{Get: &types.Get{TableName: aws.String("orders"), Key: orderKey("c", "1"), ProjectionExpression: aws.String("total")}},
+		{Get: &types.Get{TableName: aws.String("orders"), Key: orderKey("c", "1"), ProjectionExpression: aws.String("#t"), ExpressionAttributeNames: map[string]string{"#t": "total"}}},
 	}})
 	if err != nil {
 		t.Fatalf("TransactGetItems: %v", err)

@@ -73,8 +73,8 @@ func TestUpdateErrors(t *testing.T) {
 		{expr: "SET a = size(s)", wantErr: "not allowed in an update expression"},
 		{expr: "SET a = :nope", wantErr: "attribute value: :nope"},
 		{expr: "SET a = s + :one", wantErr: "incorrect data type", atApply: true},
-		{expr: "SET a = missing + :one", wantErr: "refers to an attribute that does not exist", atApply: true},
-		{expr: "SET no.such = :one", wantErr: "document path provided in the update expression is invalid", atApply: true},
+		{expr: "SET a = absent + :one", wantErr: "refers to an attribute that does not exist", atApply: true},
+		{expr: "SET nope.such = :one", wantErr: "document path provided in the update expression is invalid", atApply: true},
 		{expr: "ADD s :one", wantErr: "incorrect data type", atApply: true},
 		{expr: "DELETE ss :ns", wantErr: "incorrect data type", atApply: true},
 	}
@@ -101,7 +101,7 @@ func TestProjection(t *testing.T) {
 	}{
 		{"pk, n", `{"n":{"N":"5"},"pk":{"S":"u1"}}`},
 		{"m.nested.c, l[2].x, l[0]", `{"l":{"L":[{"N":"1"},{"M":{"x":{"N":"3"}}}]},"m":{"M":{"nested":{"M":{"c":{"N":"1"}}}}}}`},
-		{"#m.a, missing, l[9]", `{"m":{"M":{"a":{"S":"b"}}}}`},
+		{"#m.a, absent, l[9]", `{"m":{"M":{"a":{"S":"b"}}}}`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.expr, func(t *testing.T) {
@@ -134,7 +134,7 @@ func TestKeyCondition(t *testing.T) {
 		{expr: "pk = :a AND sk IN (:one)", wantErr: "Invalid operator used in KeyConditionExpression: IN"},
 		{expr: "pk < :a", wantErr: "Query key condition not supported"},
 		{expr: "sk = :one", wantErr: "Query condition missed key schema element: pk"},
-		{expr: "pk = :a AND other = :one", wantErr: "Query condition missed key schema element: sk"},
+		{expr: "pk = :a AND extra = :one", wantErr: "Query condition missed key schema element: sk"},
 		{expr: "pk = :a AND sk = :one AND sk = :ten", wantErr: "only contain one condition per key"},
 		{expr: "pk.x = :a", wantErr: "nested attributes"},
 		{expr: "attribute_exists(pk)", wantErr: "Invalid operator used in KeyConditionExpression: attribute_exists"},

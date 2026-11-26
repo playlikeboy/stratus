@@ -107,7 +107,8 @@ func TestSDKQueryLocalIndex(t *testing.T) {
 	out, err := h.client.Query(t.Context(), &sdk.QueryInput{
 		TableName:                 aws.String("orders"),
 		IndexName:                 aws.String("by-total"),
-		KeyConditionExpression:    aws.String("customer = :c AND total >= :min"),
+		KeyConditionExpression:    aws.String("customer = :c AND #t >= :min"),
+		ExpressionAttributeNames:  map[string]string{"#t": "total"},
 		ExpressionAttributeValues: map[string]types.AttributeValue{":c": str("c"), ":min": num("7")},
 		ScanIndexForward:          aws.Bool(false),
 	})
@@ -159,8 +160,8 @@ func TestSDKQueryGlobalIndex(t *testing.T) {
 	out, err := h.client.Query(t.Context(), &sdk.QueryInput{
 		TableName:                 aws.String("orders"),
 		IndexName:                 aws.String("by-status"),
-		KeyConditionExpression:    aws.String("#s = :open AND total > :n"),
-		ExpressionAttributeNames:  map[string]string{"#s": "status"},
+		KeyConditionExpression:    aws.String("#s = :open AND #t > :n"),
+		ExpressionAttributeNames:  map[string]string{"#s": "status", "#t": "total"},
 		ExpressionAttributeValues: map[string]types.AttributeValue{":open": str("open"), ":n": num("5")},
 	})
 	if err != nil {
@@ -186,9 +187,9 @@ func TestSDKScan(t *testing.T) {
 	var all []map[string]types.AttributeValue
 	in := &sdk.ScanInput{
 		TableName:                 aws.String("orders"),
-		FilterExpression:          aws.String("total < :five"),
+		FilterExpression:          aws.String("#t < :five"),
 		ProjectionExpression:      aws.String("customer, #o"),
-		ExpressionAttributeNames:  map[string]string{"#o": "order"},
+		ExpressionAttributeNames:  map[string]string{"#o": "order", "#t": "total"},
 		ExpressionAttributeValues: map[string]types.AttributeValue{":five": num("5")},
 		Limit:                     aws.Int32(4),
 	}
