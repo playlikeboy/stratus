@@ -38,14 +38,14 @@ docker run --rm -p 4566:4566 stratusemulator/stratus
 
 ## How fast
 
-Both in Docker with 1 CPU and 2 GB, from the same 63-resource manifest:
+All three in Docker with 1 CPU and 2 GB, from the same 63-resource manifest, in one run:
 
-| | LocalStack | stratus |
-|---|---|---|
-| Ready | 13.7 s | **0.24 s** |
-| Memory once ready | 636 MiB | **3 MiB** |
-| Image | 1.81 GB | **12.9 MB** |
-| SQS SendMessage, 32 clients | 883 ops/s | **13 058 ops/s** |
-| Kinesis PutRecord, 32 clients | 64 ops/s | **13 580 ops/s** |
+| | LocalStack | moto | stratus |
+|---|---|---|---|
+| Ready | 10.30 s | 6.05 s | **0.13 s** |
+| Memory once ready | 646 MiB | 90 MiB | **4 MiB** |
+| Image | 1.81 GB | 578 MB | **16.1 MB** |
+| SQS SendMessage, 32 clients | 1 176 ops/s | 78 ops/s | **23 268 ops/s** |
+| Kinesis PutRecord, 32 clients | 119 ops/s | 580 ops/s | **17 823 ops/s** |
 
 The [benchmark](benchmark.md) has every operation at 1 to 128 clients, the method, and what it does *not* compare.

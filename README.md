@@ -298,24 +298,27 @@ endpoint, err := ctr.BaseEndpoint(ctx) // BaseEndpoint for any AWS SDK client
 Coming from the LocalStack module, its [README](testcontainers/README.md#coming-from-the-localstack-module)
 maps one to the other.
 
-## Compared with LocalStack
+## Compared with LocalStack and moto
 
-Both in Docker with 1 CPU and 2 GB each, started from the same manifest, driven by the AWS SDK for
-Go. Method, every operation and its caveats: [`bench/README.md`](bench/README.md); rerun with
-`bench/run.sh`.
+All three in Docker with 1 CPU and 2 GB each, started from the same manifest, driven by the AWS SDK
+for Go, in one run. Method, every operation and its caveats: [`bench/README.md`](bench/README.md);
+rerun with `bench/run.sh`.
 
-| | LocalStack (`community-archive`) | stratus |
-|---|---|---|
-| Ready with 63 resources | 13.7 s | **0.24 s** |
-| Memory once ready | 636 MiB | **3 MiB** |
-| Image | 1.81 GB | **12.9 MB** |
-| DynamoDB PutItem, 32 clients | 194 ops/s, p99 373 ms | **11 106 ops/s, p99 30 ms** |
-| S3 GetObject 4 KiB, 32 clients | 711 ops/s, p99 101 ms | **11 301 ops/s, p99 8 ms** |
-| S3 PutObject 256 KiB, 32 clients | 329 ops/s, p99 201 ms | **663 ops/s, p99 125 ms** |
-| SQS SendMessage, 32 clients | 883 ops/s, p99 98 ms | **13 058 ops/s, p99 6 ms** |
-| Kinesis PutRecord, 32 clients | 64 ops/s, p99 2.2 s | **13 580 ops/s, p99 5 ms** |
+| | LocalStack (`community-archive`) | moto (`5.2.6`, server) | stratus |
+|---|---|---|---|
+| Ready with 63 resources | 10.30 s | 6.05 s | **0.13 s** |
+| Memory once ready | 646 MiB | 90 MiB | **4 MiB** |
+| Image | 1.81 GB | 578 MB | **16.1 MB** |
+| DynamoDB PutItem, 32 clients | 235 ops/s, p99 1 093 ms | 679 ops/s¹, p99 72 ms | **19 222 ops/s, p99 17 ms** |
+| S3 GetObject 4 KiB, 32 clients | 1 300 ops/s, p99 51 ms | 582 ops/s¹, p99 82 ms | **13 490 ops/s, p99 17 ms** |
+| S3 PutObject 256 KiB, 32 clients | 539 ops/s, **p99 106 ms** | 310 ops/s, p99 229 ms | **832 ops/s**, p99 125 ms |
+| SQS SendMessage, 32 clients | 1 176 ops/s, p99 92 ms | 78 ops/s, p99 483 ms | **23 268 ops/s, p99 2.9 ms** |
+| Kinesis PutRecord, 32 clients | 119 ops/s, p99 812 ms | 580 ops/s, p99 87 ms | **17 823 ops/s, p99 6.2 ms** |
 
-This compares speed, not behaviour: see each service's "Not emulated" column above.
+¹ Some of moto's calls failed (dropped connections) and are not counted.
+
+This compares speed, not behaviour: see each service's "Not emulated" column above. moto mocks AWS
+for unit tests; its server mode is a side use.
 
 ## Develop
 

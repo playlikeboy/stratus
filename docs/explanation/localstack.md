@@ -9,7 +9,7 @@ emulates five, in one Go binary. This page compares their scope and design. The
 |---|---|---|
 | Services | over a hundred | SQS, S3, DynamoDB, Kinesis, Step Functions |
 | Process | Python, with DynamoDB Local (Java), kinesis-mock and others | one Go binary |
-| Image | 1.81 GB | 12.9 MB |
+| Image | 1.81 GB | 16 MB |
 | Resources at start | init scripts (`ready.d`) | a declarative [manifest](../reference/manifest.md), checked at start |
 | Ready signal | `/_localstack/init/ready` once the scripts ran | `/_stratus/ready` once every resource exists |
 | Keeping data | `PERSISTENCE=1` kept what DynamoDB Local and kinesis-mock write; S3, SQS and Step Functions were lost | `-state-dir` keeps all five services, [per resource](../guides/persistence.md) |
