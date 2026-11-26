@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Name}} · stratus</title>
+<link rel="stylesheet" href="/_stratus/ui/style.css">
+<script src="/_stratus/ui/htmx.min.js"></script>
+</head>
+<body>
+<header>
+  <h1><a href="/_stratus/ui">strat<span>us</span></a></h1>
+  <span class="pill">{{.Region}}</span>
+  <span class="pill">account {{.Account}}</span>
+</header>
+<main>
+  <div class="crumbs"><a href="/_stratus/ui">← All resources</a><span>/</span><span>{{.Service}}</span><span>/</span><span class="name">{{.Name}}</span></div>
+  {{if eq .Kind "bucket"}}<form class="toolbar" method="get" action="">
+    <input id="prefix" name="prefix" value="{{.Prefix}}" placeholder="Key prefix" aria-label="Key prefix"><button>Filter</button>
+  </form>{{end}}
+  <div id="detail" hx-get="{{.Self}}" hx-trigger="every 3s" hx-swap="innerHTML">{{template "detail-body" .}}</div>
+</main>
+</body>
+</html>
+
+{{define "detail-body"}}
+{{if .Error}}<div class="notice error">{{.Error}}</div>{{else}}
+<div class="updated">Updated {{.At}} · {{.Summary}}</div>
+
+{{if eq .Kind "queue"}}<div class="list">{{range .Messages}}
+  <div class="entry">
+    <div class="meta"><b class="{{if eq .State "in flight"}}amber-text{{else if eq .State "visible"}}green-text{{end}}">{{.State}}</b>
+      <span>sent <b>{{time .SentAt}}</b></span><span>received <b>{{.ReceiveCount}}</b>×</span>
+      {{if .GroupID}}<span>group <b>{{.GroupID}}</b></span>{{end}}<span class="name">{{.ID}}</span></div>
+    <pre>{{.Body}}</pre>
+    {{if .Attributes}}<div class="meta">{{range $k, $v := .Attributes}}<span>{{$k}} <b>{{if $v.StringValue}}{{deref $v.StringValue}}{{else}}{{len $v.BinaryValue}} bytes{{end}}</b> <small>{{$v.DataType}}</small></span>{{end}}</div>{{end}}
+  </div>{{else}}<div class="none">The queue is empty.</div>{{end}}
+</div>{{end}}
+
+{{if eq .Kind "stream"}}<div class="list">{{range .Records}}
+  <div class="entry">
+    <div class="meta"><span>{{.Shard}}</span><span>seq <b>{{.Sequence}}</b></span><span>key <b>{{.PartitionKey}}</b></span><span>{{time .Arrival}}</span><span>{{len .Data}} bytes</span></div>
+    <pre>{{text .Data}}</pre>
+  </div>{{else}}<div class="none">No records.</div>{{end}}
+</div>{{end}}
+
+{{if eq .Kind "bucket"}}{{if .Objects}}<div class="scroll"><table>
+  <tr><th>Key</th><th class="n">Size</th><th>Last modified</th><th>Content type</th><th></th></tr>
+  {{range .Objects}}<tr>
+    <td class="key"><a href="/_stratus/ui/s3/{{$.Name}}/object?key={{.Key}}">{{.Key}}</a></td>
+    <td class="n">{{bytes .Size}}</td><td>{{time .LastModified}}</td><td>{{.ContentType}}</td>
+    <td><a href="/_stratus/ui/s3/{{$.Name}}/download?key={{.Key}}">Download</a></td>
+  </tr>{{end}}
+</table></div>{{else}}<div class="none">No objects{{if .Prefix}} under this prefix{{end}}.</div>{{end}}{{end}}
+
+{{if eq .Kind "object"}}{{with .Object}}<div class="entry">
+  <div class="meta"><span>size <b>{{bytes .View.Size}}</b></span><span>modified <b>{{time .View.LastModified}}</b></span>
+    <span>ETag <b>{{.View.ETag}}</b></span>{{if .View.ContentType}}<span>type <b>{{.View.ContentType}}</b></span>{{end}}
+    {{if .View.VersionID}}<span>version <b>{{.View.VersionID}}</b></span>{{end}}
+    <a href="/_stratus/ui/s3/{{$.Bucket}}/download?key={{.View.Key}}">Download</a></div>
+  <pre>{{text .Head}}</pre>
+  {{if not .Whole}}<div class="meta">Showing the first {{bytes (len64 .Head)}}.</div>{{end}}
+</div>{{end}}{{end}}
+
+{{if eq .Kind "table"}}<div class="list">{{range .Items}}
+  <div class="entry"><pre>{{.}}</pre></div>{{else}}<div class="none">The table is empty.</div>{{end}}
+</div>{{end}}
+
+{{if eq .Kind "machine"}}
+<h2>Executions <small>newest first</small></h2>
+<div class="list">{{range .Executions}}
+  <div class="entry">
+    <div class="meta"><b class="{{if eq .Status "RUNNING"}}amber-text{{else if eq .Status "SUCCEEDED"}}green-text{{else}}red-text{{end}}">{{.Status}}</b>
+      <span class="name">{{.Name}}</span><span>started <b>{{time .Started}}</b></span>{{if not .Stopped.IsZero}}<span>stopped <b>{{time .Stopped}}</b></span>{{end}}</div>
+    <pre>{{.Input}}</pre>
+    {{if .Output}}<pre>{{.Output}}</pre>{{end}}
+    {{if .Error}}<div class="meta red-text"><b>{{.Error}}</b> {{.Cause}}</div>{{end}}
+  </div>{{else}}<div class="none">No executions yet.</div>{{end}}
+</div>
+<h2>Definition</h2>
+<pre>{{.Definition}}</pre>
+{{end}}
+{{end}}
+{{end}}

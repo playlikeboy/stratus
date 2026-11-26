@@ -144,6 +144,25 @@ that is not declared is an error at start. `examples/manifest.yaml` is a complet
 | `POST /_stratus/reset` | drop all state and create the manifest's resources again |
 | `POST /_stratus/expire-ttl` | delete the DynamoDB items past their TTL now; answers `{"deleted": n}` |
 | `GET /_localstack/health` | the same answer in LocalStack's shape, for existing health checks |
+| `GET /_stratus/ui` | the web panel, below |
+
+## Web panel
+
+Open `http://localhost:4566/_stratus/ui` in a browser. It shows a card per queue, stream, bucket,
+table and state machine with its counts (visible and in-flight messages, records, objects and
+bytes, items, running and failed executions), refreshed every 2 seconds. From there:
+
+- **Reset** returns to the manifest's state and **Expire TTL** deletes expired DynamoDB items.
+- **Purge** empties a queue and **Empty** deletes every object of a bucket, without notifications.
+- A resource's name opens its detail page: a queue's messages (looking does not receive them, so
+  their visibility is unchanged), a stream's newest records, a bucket's objects by key prefix with
+  each object's first 64 KiB and a download, a table's items as DynamoDB JSON, a state machine's
+  definition and executions. Each shows at most a few hundred entries.
+
+The panel is part of the binary (server-rendered with [htmx](https://htmx.org) 2.0.4, embedded),
+needs no network, and has no login, like the rest of the endpoint: anyone who can reach the port
+can use it. Its buttons only accept requests sent by the panel itself (the `HX-Request` header),
+so a page on another site cannot press them in a browser that has the panel open.
 
 ## In a Go test
 

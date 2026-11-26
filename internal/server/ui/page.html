@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>stratus</title>
+<link rel="stylesheet" href="/_stratus/ui/style.css">
+<script src="/_stratus/ui/htmx.min.js"></script>
+</head>
+<body>
+{{template "header" .}}
+<main>
+  <div id="resources" hx-get="/_stratus/ui/resources" hx-trigger="every 2s" hx-swap="innerHTML">{{template "resources.html" .}}</div>
+</main>
+</body>
+</html>
+
+{{define "header"}}<header>
+  <h1><a href="/_stratus/ui">strat<span>us</span></a></h1>
+  <span class="pill">{{.Region}}</span>
+  <span class="pill">account {{.Account}}</span>
+  <span class="spacer"></span>
+  <button hx-post="/_stratus/ui/expire-ttl" hx-target="#resources" hx-swap="innerHTML">Expire TTL</button>
+  <button class="danger" hx-post="/_stratus/ui/reset" hx-target="#resources" hx-swap="innerHTML"
+    hx-confirm="Drop all data and recreate the manifest's resources?">Reset</button>
+</header>{{end}}
