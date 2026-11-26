@@ -1,2 +1,3 @@
 stratus: OOMKilled=false exit=0
 localstack: OOMKilled=false exit=0
+moto: OOMKilled=false exit=0

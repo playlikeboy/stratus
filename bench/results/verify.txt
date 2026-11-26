@@ -1,0 +1,12 @@
+moto examples/manifest.yaml: tables: manifest 1, emulator 1
+moto examples/manifest.yaml: queues: manifest 5, emulator 5
+moto examples/manifest.yaml: streams: manifest 1, emulator 1
+moto examples/manifest.yaml: buckets: manifest 2, emulator 2
+moto examples/manifest.yaml: state machines: manifest 1, emulator 1
+moto examples/manifest.yaml: total: manifest 10, emulator 10
+moto bench/manifest-large.yaml: tables: manifest 26, emulator 26
+moto bench/manifest-large.yaml: queues: manifest 20, emulator 20
+moto bench/manifest-large.yaml: streams: manifest 4, emulator 4
+moto bench/manifest-large.yaml: buckets: manifest 12, emulator 12
+moto bench/manifest-large.yaml: state machines: manifest 1, emulator 1
+moto bench/manifest-large.yaml: total: manifest 63, emulator 63
