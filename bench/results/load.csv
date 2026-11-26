@@ -1,0 +1,81 @@
+emulator,op,conc,ops_s,p50_ms,p99_ms,errors,peak_mem_mib
+stratus,dynamodb.PutItem,1,1684,0.54,1.17,0,29
+stratus,dynamodb.PutItem,8,8383,0.86,1.99,0,137
+stratus,dynamodb.PutItem,32,11106,2.00,29.93,0,177
+stratus,dynamodb.PutItem,128,14837,5.24,57.31,0,273
+stratus,dynamodb.GetItem,1,714,0.95,7.25,0,263
+stratus,dynamodb.GetItem,8,4121,1.56,8.20,0,297
+stratus,dynamodb.GetItem,32,15517,1.71,5.07,0,312
+stratus,dynamodb.GetItem,128,17671,5.38,55.80,0,346
+stratus,dynamodb.Query,1,687,1.26,4.68,0,303
+stratus,dynamodb.Query,8,2395,1.59,53.45,0,418
+stratus,dynamodb.Query,32,2448,4.94,82.22,0,430
+stratus,dynamodb.Query,128,2644,28.16,178.84,0,437
+stratus,s3.PutObject 4KiB,1,1195,0.80,1.39,0,444
+stratus,s3.PutObject 4KiB,8,6663,1.07,2.30,0,416
+stratus,s3.PutObject 4KiB,32,9043,2.22,44.91,0,536
+stratus,s3.PutObject 4KiB,128,9515,6.94,69.80,0,654
+stratus,s3.PutObject 256KiB,1,341,2.62,7.06,0,700
+stratus,s3.PutObject 256KiB,8,576,9.53,76.69,0,702
+stratus,s3.PutObject 256KiB,32,663,36.69,124.70,0,770
+stratus,s3.PutObject 256KiB,128,691,177.74,461.43,0,846
+stratus,s3.GetObject 4KiB,1,756,1.26,2.57,0,884
+stratus,s3.GetObject 4KiB,8,5514,1.32,2.82,0,967
+stratus,s3.GetObject 4KiB,32,11301,2.35,8.31,0,628
+stratus,s3.GetObject 4KiB,128,15009,6.35,60.12,0,666
+stratus,s3.GetObject 256KiB,1,429,2.28,3.71,0,716
+stratus,s3.GetObject 256KiB,8,916,8.45,15.40,0,655
+stratus,s3.GetObject 256KiB,32,928,33.84,75.02,0,636
+stratus,s3.GetObject 256KiB,128,958,133.95,167.12,0,651
+stratus,sqs.SendMessage,1,828,1.18,2.09,0,680
+stratus,sqs.SendMessage,8,5434,1.31,3.14,0,683
+stratus,sqs.SendMessage,32,13058,2.13,5.87,0,765
+stratus,sqs.SendMessage,128,19401,5.06,52.85,0,1030
+stratus,sqs.ReceiveDelete,1,61,14.77,44.38,0,1030
+stratus,sqs.ReceiveDelete,8,510,13.23,86.72,0,1079
+stratus,sqs.ReceiveDelete,32,1220,22.82,100.96,0,1080
+stratus,sqs.ReceiveDelete,128,1705,62.32,267.64,0,1023
+stratus,kinesis.PutRecord,1,655,1.23,5.27,0,865
+stratus,kinesis.PutRecord,8,6026,1.16,2.65,0,872
+stratus,kinesis.PutRecord,32,13580,2.04,5.29,0,1034
+stratus,kinesis.PutRecord,128,19057,5.39,53.20,0,1298
+localstack,dynamodb.PutItem,1,181,4.99,13.56,0,426
+localstack,dynamodb.PutItem,8,225,25.31,91.02,0,422
+localstack,dynamodb.PutItem,32,194,150.02,372.83,0,432
+localstack,dynamodb.PutItem,128,138,684.27,2704.07,0,514
+localstack,dynamodb.GetItem,1,265,3.36,14.55,0,503
+localstack,dynamodb.GetItem,8,165,41.00,162.16,0,488
+localstack,dynamodb.GetItem,32,227,122.61,533.78,0,488
+localstack,dynamodb.GetItem,128,237,507.77,966.72,0,514
+localstack,dynamodb.Query,1,114,7.27,54.92,0,507
+localstack,dynamodb.Query,8,147,48.62,185.99,0,512
+localstack,dynamodb.Query,32,173,185.25,312.55,0,509
+localstack,dynamodb.Query,128,181,696.74,1150.19,0,539
+localstack,s3.PutObject 4KiB,1,372,2.51,4.82,0,524
+localstack,s3.PutObject 4KiB,8,787,8.77,45.68,0,542
+localstack,s3.PutObject 4KiB,32,777,36.90,108.35,0,544
+localstack,s3.PutObject 4KiB,128,733,151.85,459.93,0,551
+localstack,s3.PutObject 256KiB,1,247,3.64,6.51,0,1042
+localstack,s3.PutObject 256KiB,8,310,19.98,53.55,0,1177
+localstack,s3.PutObject 256KiB,32,329,91.87,200.96,0,1217
+localstack,s3.PutObject 256KiB,128,265,465.23,976.32,0,1276
+localstack,s3.GetObject 4KiB,1,411,2.04,5.71,0,1225
+localstack,s3.GetObject 4KiB,8,684,10.63,26.01,0,1251
+localstack,s3.GetObject 4KiB,32,711,41.32,100.70,0,1226
+localstack,s3.GetObject 4KiB,128,782,154.24,341.40,0,1236
+localstack,s3.GetObject 256KiB,1,217,4.07,13.32,0,1229
+localstack,s3.GetObject 256KiB,8,416,17.25,69.84,0,1230
+localstack,s3.GetObject 256KiB,32,467,66.74,123.38,0,1231
+localstack,s3.GetObject 256KiB,128,441,284.43,425.68,0,1233
+localstack,sqs.SendMessage,1,544,1.70,3.82,0,1234
+localstack,sqs.SendMessage,8,827,8.31,26.29,0,1240
+localstack,sqs.SendMessage,32,883,32.25,98.09,0,1248
+localstack,sqs.SendMessage,128,663,184.70,435.49,0,1261
+localstack,sqs.ReceiveDelete,1,48,19.75,58.93,0,1261
+localstack,sqs.ReceiveDelete,8,76,99.91,209.27,0,1296
+localstack,sqs.ReceiveDelete,32,70,418.61,931.61,0,1275
+localstack,sqs.ReceiveDelete,128,71,1749.28,2000.36,0,1261
+localstack,kinesis.PutRecord,1,81,9.55,58.49,0,1289
+localstack,kinesis.PutRecord,8,73,94.05,422.67,0,1347
+localstack,kinesis.PutRecord,32,64,375.05,2197.24,0,1416
+localstack,kinesis.PutRecord,128,64,1800.90,2689.89,0,1392
