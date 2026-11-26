@@ -38,6 +38,7 @@ func run(args []string) error {
 	region := flags.String("region", awsapi.DefaultRegion, "region of every resource")
 	account := flags.String("account", awsapi.DefaultAccount, "account id of every resource")
 	healthcheck := flags.Bool("healthcheck", false, "check that a running stratus on -listen is ready, then exit")
+	dataDir := flags.String("data-dir", "", "existing directory to keep S3 object bytes in, under a directory removed on exit; when empty the user's cache directory, else /var/tmp (never /tmp, often a tmpfs held in memory)")
 	var https tlsOptions
 	tlsListen := flags.String("tls-listen", "", "address to also serve HTTPS on, for example :4567")
 	flags.StringVar(&https.certFile, "tls-cert", "", "certificate file for -tls-listen; a self-signed one is generated when empty")
@@ -65,10 +66,12 @@ func run(args []string) error {
 	emulator, err := server.New(server.Config{
 		Identity: awsapi.Identity{Account: *account, Region: *region},
 		Manifest: resources,
+		DataDir:  *dataDir,
 	})
 	if err != nil {
 		return fmt.Errorf("creating the manifest's resources: %w", err)
 	}
+	defer func() { _ = emulator.Close() }()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

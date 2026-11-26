@@ -33,7 +33,7 @@ type object struct {
 	key          string
 	versionID    string // empty: the null version
 	deleteMarker bool
-	data         []byte
+	body         *blob  // nil only for a delete marker
 	etag         string // quoted
 	lastModified time.Time
 	meta         objectMeta
@@ -62,7 +62,12 @@ func newBucket(name, region string, now time.Time) *bucket {
 	}
 }
 
-func (o *object) size() int64 { return int64(len(o.data)) }
+func (o *object) size() int64 {
+	if o.body == nil {
+		return 0
+	}
+	return o.body.size
+}
 
 // wireVersionID is the version id as S3 shows it: "null" for the null version.
 func (o *object) wireVersionID() string {

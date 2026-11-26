@@ -3,7 +3,10 @@
 package server
 
 import (
+	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -23,6 +26,9 @@ type Config struct {
 	Identity awsapi.Identity
 	Manifest manifest.Manifest
 	Clock    clock.Clock
+	// DataDir is the existing directory in which S3 keeps object bytes, in a
+	// directory of their own that Close removes. Empty: DefaultDataDir.
+	DataDir string
 }
 
 // Server is one emulator. It is ready as soon as New returns: the manifest's
@@ -36,6 +42,7 @@ type Server struct {
 	targets  manifest.Targets
 	gateway  *gateway.Gateway
 	control  *http.ServeMux
+	dataDir  string // this emulator's own directory of object bytes, removed by Close
 }
 
 func New(cfg Config) (*Server, error) {
@@ -48,9 +55,17 @@ func New(cfg Config) (*Server, error) {
 	if cfg.Clock == nil {
 		cfg.Clock = clock.System{}
 	}
+	if cfg.DataDir == "" {
+		cfg.DataDir = DefaultDataDir()
+	}
+	// A directory of its own: nothing left by an earlier run is in the way.
+	dataDir, err := os.MkdirTemp(cfg.DataDir, "stratus-")
+	if err != nil {
+		return nil, fmt.Errorf("creating the data directory: %w", err)
+	}
 	queues := sqs.New(cfg.Identity, cfg.Clock)
 	streams := kinesis.New(cfg.Identity, cfg.Clock)
-	buckets := s3.New(cfg.Identity, cfg.Clock)
+	buckets := s3.New(cfg.Identity, cfg.Clock, dataDir)
 	buckets.SetQueueNotifier(notifyQueue(queues))
 	tables := dynamodb.New(cfg.Identity, cfg.Clock)
 	machines := sfn.New(cfg.Identity, cfg.Clock)
@@ -61,6 +76,7 @@ func New(cfg Config) (*Server, error) {
 		targets:  manifest.Targets{Identity: cfg.Identity, SQS: queues, Kinesis: streams, S3: buckets, DynamoDB: tables, SFN: machines},
 		gateway:  gateway.New(queues, streams, buckets, tables, machines).WithFallback(buckets),
 		control:  http.NewServeMux(),
+		dataDir:  dataDir,
 	}
 	s.control.HandleFunc("GET /_stratus/ready", s.handleReady)
 	s.control.HandleFunc("POST /_stratus/reset", s.handleReset)
@@ -68,9 +84,33 @@ func New(cfg Config) (*Server, error) {
 	s.control.HandleFunc("GET /_localstack/health", s.handleLocalStackHealth)
 
 	if err := s.applyManifest(); err != nil {
+		_ = s.Close()
 		return nil, err
 	}
 	return s, nil
+}
+
+// DefaultDataDir is where object bytes go when Config.DataDir is empty: a
+// directory on disk, never /tmp, which is a tmpfs held in memory on many
+// systems. It is the user's cache directory, else /var/tmp, which outlives a
+// reboot and so is not a tmpfs, else the system's temporary directory.
+func DefaultDataDir() string {
+	if cache, err := os.UserCacheDir(); err == nil {
+		dir := filepath.Join(cache, "stratus")
+		if os.MkdirAll(dir, 0o700) == nil {
+			return dir
+		}
+	}
+	if info, err := os.Stat("/var/tmp"); err == nil && info.IsDir() {
+		return "/var/tmp"
+	}
+	return os.TempDir()
+}
+
+// Close removes the object bytes the emulator kept on disk. The emulator
+// must not serve requests after it.
+func (s *Server) Close() error {
+	return os.RemoveAll(s.dataDir)
 }
 
 // Reset returns the emulator to the state it started in: everything is

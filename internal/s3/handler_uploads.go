@@ -82,7 +82,7 @@ func (s *Service) listParts(w http.ResponseWriter, bucketName, key string, q url
 			break
 		}
 		out.Parts = append(out.Parts, partXML{
-			PartNumber: p.number, LastModified: xmlTime(p.lastModified), ETag: p.etag, Size: int64(len(p.data)),
+			PartNumber: p.number, LastModified: xmlTime(p.lastModified), ETag: p.etag, Size: p.body.size,
 			checksumFields: checksumXML(u.algorithm, p.checksum, ""),
 		})
 		out.NextPartNumberMarker = p.number

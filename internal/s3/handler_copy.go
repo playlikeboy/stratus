@@ -105,22 +105,33 @@ func (s *Service) copyObject(w http.ResponseWriter, r *http.Request, bucketName,
 // object, so its ETag is recomputed; a checksum algorithm in the request
 // recomputes the checksum in that algorithm.
 func copiedObject(src *object, key, directive, algorithmName string, h http.Header) (*object, error) {
-	obj := &object{key: key, data: src.data, etag: src.etag, meta: src.meta, checksum: src.checksum}
+	// The copy shares the source's blob: both are immutable.
+	obj := &object{key: key, body: src.body, etag: src.etag, meta: src.meta, checksum: src.checksum}
 	if directive == "REPLACE" {
 		obj.meta = metaFromHeaders(h)
 	}
-	if src.partSizes != nil {
-		obj.etag = etagOf(src.data)
-		if src.checksum.typ == checksumComposite {
-			obj.checksum = defaultChecksum(src.data)
-		}
-	}
+	algorithm := ""
 	if algorithmName != "" {
-		algorithm, ok := normalizeAlgorithm(algorithmName)
-		if !ok {
+		var ok bool
+		if algorithm, ok = normalizeAlgorithm(algorithmName); !ok {
 			return nil, errInvalidRequest("Checksum algorithm " + algorithmName + " is not supported.")
 		}
-		obj.checksum = checksum{algorithm: algorithm, value: computeChecksum(algorithm, src.data), typ: checksumFullObject}
+	}
+	if src.partSizes == nil && algorithm == "" {
+		return obj, nil
+	}
+	data, err := src.body.bytes()
+	if err != nil {
+		return nil, err
+	}
+	if src.partSizes != nil {
+		obj.etag = etagOf(data)
+		if src.checksum.typ == checksumComposite {
+			obj.checksum = defaultChecksum(data)
+		}
+	}
+	if algorithm != "" {
+		obj.checksum = checksum{algorithm: algorithm, value: computeChecksum(algorithm, data), typ: checksumFullObject}
 	}
 	return obj, nil
 }
