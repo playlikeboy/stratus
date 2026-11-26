@@ -38,3 +38,19 @@ jobs:
           docker run -d --name stratus -p 4566:4566 stratus:ci
           for _ in $(seq 1 50); do curl -sf localhost:4566/_stratus/ready && exit 0; sleep 0.2; done
           docker logs stratus; exit 1
+
+  testcontainers:
+    # The Testcontainers module, against the image built from this commit.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: testcontainers/go.mod
+          cache-dependency-path: testcontainers/go.sum
+      - run: docker build -t stratus:ci .
+      - name: go test
+        working-directory: testcontainers
+        env:
+          STRATUS_IMAGE: stratus:ci
+        run: go test -race -count=1 ./...

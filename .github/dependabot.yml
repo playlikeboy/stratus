@@ -6,6 +6,12 @@ updates:
     groups:
       aws-sdk:
         patterns: ["github.com/aws/*"]
+  - package-ecosystem: gomod
+    directory: /testcontainers
+    schedule: { interval: weekly }
+    groups:
+      testcontainers:
+        patterns: ["*"]
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly }
