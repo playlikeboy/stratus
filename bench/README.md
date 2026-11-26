@@ -50,21 +50,51 @@ milliseconds. LocalStack's start grows with the number of resources, by about 5.
 
 ## Load
 
-Operations per second and p99 latency in ms, LocalStack → stratus. Every measurement completed
-without errors, and neither emulator was killed for memory.
+Throughput and p99 latency for each emulator, side by side; the better value of each pair is in bold.
+Every measurement completed without errors, and neither emulator was killed for memory.
 
-| Operation | 1 client | 8 clients | 32 clients | 128 clients | p99 at 32 clients |
-|---|---|---|---|---|---|
-| DynamoDB PutItem | 181 → 1 684 | 225 → 8 383 | 194 → 11 106 | 138 → 14 837 | 373 → 30 |
-| DynamoDB GetItem | 265 → 714 | 165 → 4 121 | 227 → 15 517 | 237 → 17 671 | 534 → 5 |
-| DynamoDB Query (50 items) | 114 → 687 | 147 → 2 395 | 173 → 2 448 | 181 → 2 644 | 313 → 82 |
-| S3 PutObject 4 KiB | 372 → 1 195 | 787 → 6 663 | 777 → 9 043 | 733 → 9 515 | 108 → 45 |
-| S3 PutObject 256 KiB | 247 → 341 | 310 → 576 | 329 → 663 | 265 → 691 | 201 → 125 |
-| S3 GetObject 4 KiB | 411 → 756 | 684 → 5 514 | 711 → 11 301 | 782 → 15 009 | 101 → 8 |
-| S3 GetObject 256 KiB | 217 → 429 | 416 → 916 | 467 → 928 | 441 → 958 | 123 → 75 |
-| SQS SendMessage | 544 → 828 | 827 → 5 434 | 883 → 13 058 | 663 → 19 401 | 98 → 6 |
-| SQS receive 10 + delete each | 48 → 61 | 76 → 510 | 70 → 1 220 | 71 → 1 705 | 932 → 101 |
-| Kinesis PutRecord | 81 → 655 | 73 → 6 026 | 64 → 13 580 | 64 → 19 057 | 2 197 → 5 |
+| Operation | Clients | LocalStack ops/s | stratus ops/s | LocalStack p99 ms | stratus p99 ms |
+|---|---:|---:|---:|---:|---:|
+| DynamoDB PutItem | 1 | 181 | **1 684** | 14 | **1.2** |
+|  | 8 | 225 | **8 383** | 91 | **2.0** |
+|  | 32 | 194 | **11 106** | 373 | **30** |
+|  | 128 | 138 | **14 837** | 2704 | **57** |
+| DynamoDB GetItem | 1 | 265 | **714** | 15 | **7.2** |
+|  | 8 | 165 | **4 121** | 162 | **8.2** |
+|  | 32 | 227 | **15 517** | 534 | **5.1** |
+|  | 128 | 237 | **17 671** | 967 | **56** |
+| DynamoDB Query (50 items) | 1 | 114 | **687** | 55 | **4.7** |
+|  | 8 | 147 | **2 395** | 186 | **53** |
+|  | 32 | 173 | **2 448** | 313 | **82** |
+|  | 128 | 181 | **2 644** | 1150 | **179** |
+| S3 PutObject 4 KiB | 1 | 372 | **1 195** | 4.8 | **1.4** |
+|  | 8 | 787 | **6 663** | 46 | **2.3** |
+|  | 32 | 777 | **9 043** | 108 | **45** |
+|  | 128 | 733 | **9 515** | 460 | **70** |
+| S3 PutObject 256 KiB | 1 | 247 | **341** | **6.5** | 7.1 |
+|  | 8 | 310 | **576** | **54** | 77 |
+|  | 32 | 329 | **663** | 201 | **125** |
+|  | 128 | 265 | **691** | 976 | **461** |
+| S3 GetObject 4 KiB | 1 | 411 | **756** | 5.7 | **2.6** |
+|  | 8 | 684 | **5 514** | 26 | **2.8** |
+|  | 32 | 711 | **11 301** | 101 | **8.3** |
+|  | 128 | 782 | **15 009** | 341 | **60** |
+| S3 GetObject 256 KiB | 1 | 217 | **429** | 13 | **3.7** |
+|  | 8 | 416 | **916** | 70 | **15** |
+|  | 32 | 467 | **928** | 123 | **75** |
+|  | 128 | 441 | **958** | 426 | **167** |
+| SQS SendMessage | 1 | 544 | **828** | 3.8 | **2.1** |
+|  | 8 | 827 | **5 434** | 26 | **3.1** |
+|  | 32 | 883 | **13 058** | 98 | **5.9** |
+|  | 128 | 663 | **19 401** | 435 | **53** |
+| SQS receive 10 + delete each | 1 | 48 | **61** | 59 | **44** |
+|  | 8 | 76 | **510** | 209 | **87** |
+|  | 32 | 70 | **1 220** | 932 | **101** |
+|  | 128 | 71 | **1 705** | 2000 | **268** |
+| Kinesis PutRecord | 1 | 81 | **655** | 58 | **5.3** |
+|  | 8 | 73 | **6 026** | 423 | **2.6** |
+|  | 32 | 64 | **13 580** | 2197 | **5.3** |
+|  | 128 | 64 | **19 057** | 2690 | **53** |
 
 `load.csv` has p50 and p99 for every row.
 
