@@ -32,8 +32,13 @@ type transactWriteItem struct {
 }
 
 type transactWriteItemsInput struct {
+	capacityInput
 	TransactItems      []transactWriteItem
 	ClientRequestToken string // accepted; idempotency is not emulated
+}
+
+type transactWriteItemsOutput struct {
+	ConsumedCapacity []consumedCapacity `json:",omitempty"`
 }
 
 // txAction is a parsed and statically checked transaction action.
@@ -49,6 +54,10 @@ type txAction struct {
 // a condition fails or a change is invalid, none, cancelling the transaction
 // with one reason per action.
 func (s *Service) transactWriteItemsOp(in transactWriteItemsInput) (any, error) {
+	capMode, err := in.wantCapacity()
+	if err != nil {
+		return nil, err
+	}
 	if err := checkTransactSize(len(in.TransactItems)); err != nil {
 		return nil, err
 	}
@@ -71,6 +80,7 @@ func (s *Service) transactWriteItemsOp(in transactWriteItemsInput) (any, error) 
 	writes := make([]write, len(actions))
 	reasons := make([]cancellationReason, len(actions))
 	cancelled := false
+	ct := newCapacityTracker()
 	for i, a := range actions {
 		w, err := a.prepare()
 		reasons[i] = reasonFor(err, a.in.ReturnValuesOnConditionCheckFailure)
@@ -78,6 +88,7 @@ func (s *Service) transactWriteItemsOp(in transactWriteItemsInput) (any, error) 
 			cancelled = true
 		}
 		writes[i] = w
+		ct.addWrite(a.t, w, 2.0)
 	}
 	if cancelled {
 		return nil, errTransactionCanceled(reasons)
@@ -85,7 +96,7 @@ func (s *Service) transactWriteItemsOp(in transactWriteItemsInput) (any, error) 
 	for _, w := range writes {
 		w.apply()
 	}
-	return empty{}, nil
+	return transactWriteItemsOutput{ConsumedCapacity: ct.list(capMode)}, nil
 }
 
 func checkTransactSize(n int) error {
@@ -194,8 +205,22 @@ type itemResponse struct {
 	Item attr.Item `json:",omitempty"`
 }
 
+type transactGetItemsInput struct {
+	capacityInput
+	TransactItems []transactGetItem
+}
+
+type transactGetItemsOutput struct {
+	Responses        []itemResponse
+	ConsumedCapacity []consumedCapacity `json:",omitempty"`
+}
+
 // transactGetItemsOp reads every item at one point in time, under the lock.
-func (s *Service) transactGetItemsOp(in struct{ TransactItems []transactGetItem }) (any, error) {
+func (s *Service) transactGetItemsOp(in transactGetItemsInput) (any, error) {
+	capMode, err := in.wantCapacity()
+	if err != nil {
+		return nil, err
+	}
 	if err := checkTransactSize(len(in.TransactItems)); err != nil {
 		return nil, err
 	}
@@ -203,6 +228,7 @@ func (s *Service) transactGetItemsOp(in struct{ TransactItems []transactGetItem 
 	defer s.mu.Unlock()
 	responses := make([]itemResponse, len(in.TransactItems))
 	seen := map[string]bool{}
+	ct := newCapacityTracker()
 	for i, item := range in.TransactItems {
 		g := item.Get
 		if g == nil {
@@ -231,7 +257,12 @@ func (s *Service) transactGetItemsOp(in struct{ TransactItems []transactGetItem 
 			return nil, errValidation("Transaction request cannot include multiple operations on one item")
 		}
 		seen[id] = true
-		responses[i] = itemResponse{project(t.get(g.Key), paths)}
+		found := t.get(g.Key)
+		ct.addRead(t, nil, attr.ItemSize(found), true, 2.0)
+		responses[i] = itemResponse{project(found, paths)}
 	}
-	return map[string][]itemResponse{"Responses": responses}, nil
+	return transactGetItemsOutput{
+		Responses:        responses,
+		ConsumedCapacity: ct.list(capMode),
+	}, nil
 }

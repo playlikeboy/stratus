@@ -22,6 +22,7 @@ const (
 type readOptions struct {
 	expressionInput
 	legacyInput
+	capacityInput
 	TableName            string
 	IndexName            string
 	FilterExpression     string
@@ -34,13 +35,15 @@ type readOptions struct {
 
 // reader is a parsed Query or Scan, ready to page through items.
 type reader struct {
-	t       *table
-	ix      *index
-	filter  *expr.Condition
-	paths   []expr.Path
-	sel     string
-	limit   int // 0: no limit
-	forward bool
+	t          *table
+	ix         *index
+	filter     *expr.Condition
+	paths      []expr.Path
+	sel        string
+	limit      int // 0: no limit
+	forward    bool
+	consistent bool
+	capMode    string
 }
 
 // page is the response of Query and Scan.
@@ -48,18 +51,23 @@ type page struct {
 	Items            *[]attr.Item `json:",omitempty"` // nil only for Select COUNT
 	Count            int
 	ScannedCount     int
-	LastEvaluatedKey attr.Item `json:",omitempty"`
+	LastEvaluatedKey attr.Item         `json:",omitempty"`
+	ConsumedCapacity *consumedCapacity `json:",omitempty"`
 }
 
 // prepare resolves the table and index and parses what Query and Scan share;
 // the caller holds the lock and calls ctx.CheckUnused once it has parsed the
 // rest.
 func (s *Service) prepare(o readOptions, ctx *expr.Context) (*reader, error) {
+	capMode, err := o.wantCapacity()
+	if err != nil {
+		return nil, err
+	}
 	t, err := s.table(o.TableName)
 	if err != nil {
 		return nil, err
 	}
-	r := &reader{t: t, ix: t.base(), forward: true}
+	r := &reader{t: t, ix: t.base(), forward: true, consistent: o.ConsistentRead, capMode: capMode}
 	if o.IndexName != "" {
 		if r.ix = t.index(o.IndexName); r.ix == nil {
 			return nil, errValidation("The table does not have the specified index: %s", o.IndexName)
@@ -160,6 +168,11 @@ func (r *reader) read(candidates []attr.Item, start attr.Item) (page, error) {
 			out.LastEvaluatedKey = r.t.keyOfIndex(r.ix, item)
 			break
 		}
+	}
+	if r.capMode != "" {
+		ct := newCapacityTracker()
+		ct.addRead(r.t, r.ix, size, r.consistent, 1.0)
+		out.ConsumedCapacity = ct.single(r.capMode)
 	}
 	return out, nil
 }

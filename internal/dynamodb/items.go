@@ -9,13 +9,15 @@ import (
 
 // attributesOutput is the response of the single-item writes.
 type attributesOutput struct {
-	Attributes attr.Item `json:",omitempty"`
+	Attributes       attr.Item         `json:",omitempty"`
+	ConsumedCapacity *consumedCapacity `json:",omitempty"`
 }
 
 // writeOptions are the parameters PutItem, UpdateItem and DeleteItem share.
 type writeOptions struct {
 	expressionInput
 	legacyInput
+	capacityInput
 	TableName                           string
 	ConditionExpression                 string
 	ReturnValues                        string
@@ -25,22 +27,35 @@ type writeOptions struct {
 // parse checks the shared parameters and parses the condition. allowed are
 // the ReturnValues the operation accepts; more is true when the request has
 // expressions besides the condition.
-func (o writeOptions) parse(allowed []string, more bool) (*expr.Context, *expr.Condition, error) {
+func (o writeOptions) parse(allowed []string, more bool) (*expr.Context, *expr.Condition, string, error) {
 	if err := o.check(); err != nil {
-		return nil, nil, err
+		return nil, nil, "", err
+	}
+	capMode, err := o.wantCapacity()
+	if err != nil {
+		return nil, nil, "", err
 	}
 	if o.ReturnValues != "" && !slices.Contains(allowed, o.ReturnValues) {
-		return nil, nil, errValidation("Return values set to invalid value")
+		return nil, nil, "", errValidation("Return values set to invalid value")
 	}
 	if err := checkReturnOnFailure(o.ReturnValuesOnConditionCheckFailure); err != nil {
-		return nil, nil, err
+		return nil, nil, "", err
 	}
 	ctx, err := o.context(more || o.ConditionExpression != "")
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, "", err
 	}
 	cond, err := parseCondition("ConditionExpression", o.ConditionExpression, ctx)
-	return ctx, cond, err
+	return ctx, cond, capMode, err
+}
+
+func singleWriteCapacity(mode string, t *table, w write) *consumedCapacity {
+	if mode == "" {
+		return nil
+	}
+	ct := newCapacityTracker()
+	ct.addWrite(t, w, 1.0)
+	return ct.single(mode)
 }
 
 type putItemInput struct {
@@ -49,7 +64,7 @@ type putItemInput struct {
 }
 
 func (s *Service) putItemOp(in putItemInput) (any, error) {
-	ctx, cond, err := in.parse([]string{"NONE", "ALL_OLD"}, false)
+	ctx, cond, capMode, err := in.parse([]string{"NONE", "ALL_OLD"}, false)
 	if err != nil {
 		return nil, err
 	}
@@ -71,10 +86,11 @@ func (s *Service) putItemOp(in putItemInput) (any, error) {
 		return nil, asConditionalCheckFailed(err, in.ReturnValuesOnConditionCheckFailure)
 	}
 	w.apply()
+	out := attributesOutput{ConsumedCapacity: singleWriteCapacity(capMode, t, w)}
 	if in.ReturnValues == "ALL_OLD" {
-		return attributesOutput{w.old}, nil
+		out.Attributes = w.old
 	}
-	return attributesOutput{}, nil
+	return out, nil
 }
 
 type deleteItemInput struct {
@@ -83,7 +99,7 @@ type deleteItemInput struct {
 }
 
 func (s *Service) deleteItemOp(in deleteItemInput) (any, error) {
-	ctx, cond, err := in.parse([]string{"NONE", "ALL_OLD"}, false)
+	ctx, cond, capMode, err := in.parse([]string{"NONE", "ALL_OLD"}, false)
 	if err != nil {
 		return nil, err
 	}
@@ -101,10 +117,11 @@ func (s *Service) deleteItemOp(in deleteItemInput) (any, error) {
 		return nil, asConditionalCheckFailed(err, in.ReturnValuesOnConditionCheckFailure)
 	}
 	w.apply()
+	out := attributesOutput{ConsumedCapacity: singleWriteCapacity(capMode, t, w)}
 	if in.ReturnValues == "ALL_OLD" {
-		return attributesOutput{w.old}, nil
+		out.Attributes = w.old
 	}
-	return attributesOutput{}, nil
+	return out, nil
 }
 
 type updateItemInput struct {
@@ -114,7 +131,7 @@ type updateItemInput struct {
 }
 
 func (s *Service) updateItemOp(in updateItemInput) (any, error) {
-	ctx, cond, err := in.parse([]string{"NONE", "ALL_OLD", "UPDATED_OLD", "ALL_NEW", "UPDATED_NEW"},
+	ctx, cond, capMode, err := in.parse([]string{"NONE", "ALL_OLD", "UPDATED_OLD", "ALL_NEW", "UPDATED_NEW"},
 		in.UpdateExpression != "")
 	if err != nil {
 		return nil, err
@@ -137,7 +154,10 @@ func (s *Service) updateItemOp(in updateItemInput) (any, error) {
 		return nil, asConditionalCheckFailed(err, in.ReturnValuesOnConditionCheckFailure)
 	}
 	w.apply()
-	return attributesOutput{updateReturnValues(in.ReturnValues, w, upd)}, nil
+	return attributesOutput{
+		Attributes:       updateReturnValues(in.ReturnValues, w, upd),
+		ConsumedCapacity: singleWriteCapacity(capMode, t, w),
+	}, nil
 }
 
 // updateReturnValues picks what UpdateItem returns. UPDATED_OLD and
@@ -167,14 +187,24 @@ func updateReturnValues(rv string, w write, upd *expr.Update) attr.Item {
 type getItemInput struct {
 	expressionInput
 	legacyInput
+	capacityInput
 	TableName            string
 	Key                  attr.Item
 	ProjectionExpression string
 	ConsistentRead       bool
 }
 
+type getItemOutput struct {
+	Item             *attr.Item        `json:",omitempty"`
+	ConsumedCapacity *consumedCapacity `json:",omitempty"`
+}
+
 func (s *Service) getItemOp(in getItemInput) (any, error) {
 	if err := in.check(); err != nil {
+		return nil, err
+	}
+	capMode, err := in.wantCapacity()
+	if err != nil {
 		return nil, err
 	}
 	ctx, err := in.context(in.ProjectionExpression != "")
@@ -198,9 +228,16 @@ func (s *Service) getItemOp(in getItemInput) (any, error) {
 		return nil, err
 	}
 	item := t.get(in.Key)
+	var cc *consumedCapacity
+	if capMode != "" {
+		ct := newCapacityTracker()
+		ct.addRead(t, nil, attr.ItemSize(item), in.ConsistentRead, 1.0)
+		cc = ct.single(capMode)
+	}
 	if item == nil {
-		return empty{}, nil
+		return getItemOutput{ConsumedCapacity: cc}, nil
 	}
 	// A found item is returned even when the projection leaves it empty.
-	return map[string]attr.Item{"Item": project(item, paths)}, nil
+	proj := project(item, paths)
+	return getItemOutput{Item: &proj, ConsumedCapacity: cc}, nil
 }
