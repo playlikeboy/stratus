@@ -56,8 +56,8 @@ func TestConditionEval(t *testing.T) {
 	}{
 		{"n = :five", true},
 		{"n <> :five", false},
-		{"missing <> :five", true},
-		{"missing = :five", false},
+		{"absent <> :five", true},
+		{"absent = :five", false},
 		{"n < :ten AND n > :one", true},
 		{"n <= :five AND n >= :five", true},
 		{"n > :ten OR s = :hello", true},
@@ -70,7 +70,7 @@ func TestConditionEval(t *testing.T) {
 		{"attribute_exists(m.nested.c)", true},
 		{"attribute_exists(l[2].x)", true},
 		{"attribute_exists(l[3])", false},
-		{"attribute_not_exists(missing)", true},
+		{"attribute_not_exists(absent)", true},
 		{"attribute_type(ss, :SS)", true},
 		{"attribute_type(s, :SS)", false},
 		{"begins_with(s, :he)", true},
@@ -169,5 +169,92 @@ func TestUnusedPlaceholders(t *testing.T) {
 	err = ctx.CheckUnused()
 	if err == nil || !strings.Contains(err.Error(), "ExpressionAttributeValues unused in expressions: keys: {:y}") {
 		t.Fatalf("CheckUnused = %v, want :y reported unused", err)
+	}
+}
+
+func TestReservedWords(t *testing.T) {
+	want := "Attribute name is a reserved keyword; reserved keyword:"
+	cases := []struct {
+		name string
+		fn   func(*Context) error
+		word string
+	}{
+		{
+			name: "condition expression",
+			word: "status",
+			fn: func(ctx *Context) error {
+				_, err := ParseCondition("ConditionExpression", "status = :open", ctx)
+				return err
+			},
+		},
+		{
+			name: "filter expression case insensitive",
+			word: "STATUS",
+			fn: func(ctx *Context) error {
+				_, err := ParseCondition("FilterExpression", "STATUS = :open", ctx)
+				return err
+			},
+		},
+		{
+			name: "nested path segment",
+			word: "status",
+			fn: func(ctx *Context) error {
+				_, err := ParseCondition("ConditionExpression", "m.status = :open", ctx)
+				return err
+			},
+		},
+		{
+			name: "key condition expression",
+			word: "key",
+			fn: func(ctx *Context) error {
+				_, err := ParseKeyCondition("key = :open", ctx, "key", "")
+				return err
+			},
+		},
+		{
+			name: "projection expression",
+			word: "name",
+			fn: func(ctx *Context) error {
+				_, err := ParseProjection("pk, name", ctx)
+				return err
+			},
+		},
+		{
+			name: "update expression",
+			word: "status",
+			fn: func(ctx *Context) error {
+				_, err := ParseUpdate("SET status = :open", ctx)
+				return err
+			},
+		},
+		{
+			name: "size as bare attribute name",
+			word: "size",
+			fn: func(ctx *Context) error {
+				_, err := ParseCondition("ConditionExpression", "size = :one", ctx)
+				return err
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.fn(NewContext(nil, values(t)))
+			if err == nil || !strings.Contains(err.Error(), want+" "+tc.word) {
+				t.Fatalf("err = %v, want %q", err, want+" "+tc.word)
+			}
+		})
+	}
+
+	// Names given through ExpressionAttributeNames stay allowed, regardless of case.
+	ctx := NewContext(map[string]string{"#s": "STATUS", "#n": "name"}, values(t))
+	if _, err := ParseCondition("ConditionExpression", "#s = :open", ctx); err != nil {
+		t.Fatalf("ConditionExpression with #s: %v", err)
+	}
+	if _, err := ParseProjection("#s, #n", ctx); err != nil {
+		t.Fatalf("ProjectionExpression with #s, #n: %v", err)
+	}
+	if _, err := ParseUpdate("SET #s = :open", ctx); err != nil {
+		t.Fatalf("UpdateExpression with #s: %v", err)
 	}
 }

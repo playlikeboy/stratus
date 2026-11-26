@@ -176,7 +176,13 @@ func (p *parser) pathName() (string, error) {
 		}
 		p.ctx.usedNames[t.text] = true
 		return name, nil
-	case t.kind == tIdent && !slices.Contains(reserved, strings.ToLower(t.text)):
+	case t.kind == tIdent:
+		if slices.Contains(reserved, strings.ToLower(t.text)) {
+			return "", p.unexpected()
+		}
+		if isReservedWord(t.text) {
+			return "", attr.Errorf("Invalid %s: Attribute name is a reserved keyword; reserved keyword: %s", p.kind, t.text)
+		}
 		p.next()
 		return t.text, nil
 	}
