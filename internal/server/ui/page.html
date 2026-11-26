@@ -10,7 +10,7 @@
 <body>
 {{template "header" .}}
 <main>
-  <details class="ops"><summary>Create a resource</summary><div class="ops-grid">
+  <details class="dropdown panel"><summary>Create a resource</summary><div class="ops-grid">
     <form class="op" hx-post="/_stratus/ui/create/queue" hx-target="#resources" hx-swap="innerHTML">
       <h3>Queue</h3>
       {{template "field" (field "name" "Name" "required" "placeholder=orders" "hint=A name ending in .fifo makes a FIFO queue.")}}

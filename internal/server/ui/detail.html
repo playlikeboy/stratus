@@ -29,7 +29,7 @@ function editing() {
     {{template "filters" .}}
     <div class="toolbar-actions"><button>Search</button><a href="{{.Self}}">Clear</a></div>
   </form>
-  <details class="ops"><summary>Operations</summary><div class="ops-grid">{{template "operations" .}}</div></details>
+  <details class="dropdown panel"><summary>Operations</summary><div class="ops-grid">{{template "operations" .}}</div></details>
   {{end}}
   <div id="detail" hx-get="{{.Self}}" hx-trigger="every 3s [!editing()]" hx-include="#filters" hx-swap="innerHTML">{{template "detail-body" .}}</div>
   {{end}}
@@ -72,7 +72,7 @@ function editing() {
   <dl><div><dt>Type</dt><dd>{{enum .Type}}</dd></div><div><dt>Role</dt><dd>{{.RoleARN}}</dd></div>
   <div><dt>Created</dt><dd>{{time .Created}}</dd></div><div><dt>Updated</dt><dd>{{time .Updated}}</dd></div>
   <div><dt>ARN</dt><dd>{{.ARN}}</dd></div></dl>
-  <details><summary>Definition</summary><pre>{{(decode .Definition).Text}}</pre></details>
+  <details class="dropdown panel"><summary>Definition</summary><pre>{{(decode .Definition).Text}}</pre></details>
 {{end}}{{end}}
 {{if eq .Kind "object"}}{{with .Object}}
   <dl><div><dt>Key</dt><dd><code>{{.View.Key}}</code></dd></div><div><dt>Size</dt><dd>{{bytes .View.Size}}</dd></div>
@@ -180,7 +180,7 @@ function editing() {
       <span class="spacer"></span>
       <form hx-post="{{$.Self}}/delete" hx-target="#detail" hx-swap="innerHTML" hx-include="#filters" hx-confirm="Delete this message?"><input type="hidden" name="id" value="{{.ID}}"><button class="small danger">Delete</button></form></div>
     <pre>{{(decode .Body).Text}}</pre>
-    <details class="edit"><summary>Edit</summary>
+    <details class="dropdown inline"><summary>Edit</summary>
       <form hx-post="{{$.Self}}/replace" hx-target="#detail" hx-swap="innerHTML" hx-include="#filters">
         <input type="hidden" name="id" value="{{.ID}}">
         {{template "field" (field "body" "Body" "rows=5" "required" "hint=SQS cannot change a message: saving deletes this one and sends a new one with the same attributes, at the end of the queue." | val .Body)}}
@@ -211,7 +211,7 @@ function editing() {
   {{template "decoded" .Head}}
   {{if not .Whole}}<div class="meta">Showing the first {{bytes 65536}}; download the object for all of it.</div>{{end}}
   <div id="object-notice"></div>
-  {{if and .Whole .Head.Editable}}<details class="edit"><summary>Edit</summary>
+  {{if and .Whole .Head.Editable}}<details class="dropdown inline"><summary>Edit</summary>
     <form hx-post="/_stratus/ui/s3/{{$.Name}}/object/save" hx-target="#object-notice" hx-swap="innerHTML">
       <input type="hidden" name="key" value="{{.View.Key}}"><input type="hidden" name="content_type" value="{{.View.ContentType}}">
       {{template "field" (field "content" "Content" "rows=12" "hint=Saving stores the text as shown, as a PUT does: a new version on a versioned bucket." | val .Head.Text)}}
@@ -225,7 +225,7 @@ function editing() {
     <div class="meta"><span class="spacer"></span>
       <form hx-post="{{$.Self}}/delete" hx-target="#detail" hx-swap="innerHTML" hx-include="#filters" hx-confirm="Delete this item?"><input type="hidden" name="item" value="{{.}}"><button class="small danger">Delete</button></form></div>
     <pre>{{.}}</pre>
-    <details class="edit"><summary>Edit</summary>
+    <details class="dropdown inline"><summary>Edit</summary>
       <form hx-post="{{$.Self}}/put" hx-target="#detail" hx-swap="innerHTML" hx-include="#filters">
         {{template "field" (field "item" "Item in DynamoDB JSON" "rows=8" "required" "hint=Saving replaces the item. Changing its key makes a new item and keeps this one." | val .)}}
         <button>Save</button></form></details>

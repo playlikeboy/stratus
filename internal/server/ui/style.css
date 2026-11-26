@@ -79,9 +79,7 @@ td.key { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:
 .info dl > div { min-width: 0; }
 .info dt { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
 .info dd { margin: 2px 0 0; font-size: 13px; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
-.info details summary, .ops summary { cursor: pointer; font-weight: 600; font-size: 14px; }
 code { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code); padding: 1px 5px; border-radius: 4px; }
-.ops { margin: 4px 0 14px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; }
 .ops-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; margin-top: 10px; }
 form.op { display: grid; gap: 8px; align-content: start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; min-width: 0; }
 form.op h3 { margin: 0; font-size: 14px; }
@@ -96,10 +94,6 @@ form.op button { justify-self: start; }
 td.actions { display: flex; gap: 10px; align-items: center; }
 td.small, .key.small { font-size: 11px; color: var(--muted); }
 a.button { font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); }
-details.edit { border-top: 1px dashed var(--line); padding-top: 6px; }
-details.edit summary { cursor: pointer; color: var(--accent); font-size: 13px; font-weight: 600; }
-details.edit form { display: grid; gap: 8px; margin-top: 8px; }
-details.edit form button { justify-self: start; }
 
 /* Form controls: one field component everywhere (see ui/fields.html). */
 .field { display: grid; gap: 5px; min-width: 0; align-content: start; }
@@ -143,3 +137,24 @@ form.op .row .field, form.op > .field { width: 100%; }
 .card:has(.card-link:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
 .card:active { transform: translateY(0); }
 @media (prefers-reduced-motion: reduce) { .card, .card:hover, .card:active { transform: none; transition: none; } }
+
+/* One dropdown everywhere: a <details class="dropdown"> with a chevron that
+   turns when it opens. "panel" is a section of its own (create, operations,
+   definition); "inline" sits inside an entry (edit). */
+.dropdown > summary { list-style: none; display: flex; align-items: center; gap: 8px; cursor: pointer;
+  font-weight: 600; user-select: none; border-radius: 8px; }
+.dropdown > summary::-webkit-details-marker { display: none; }
+.dropdown > summary::before { content: ""; width: 7px; height: 7px; flex: none; margin: 0 3px;
+  border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg); transition: transform .15s ease; }
+.dropdown[open] > summary::before { transform: rotate(45deg); }
+.dropdown.panel { margin: 4px 0 14px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
+.dropdown.panel > summary { padding: 11px 14px; font-size: 14px; }
+.dropdown.panel > summary:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.dropdown.panel[open] > summary { border-bottom: 1px solid var(--line); border-radius: 12px 12px 0 0; }
+.dropdown.panel > :not(summary) { margin: 12px 14px 14px; }
+.dropdown.inline { border-top: 1px dashed var(--line); padding-top: 6px; }
+.dropdown.inline > summary { display: inline-flex; padding: 2px 6px 2px 0; font-size: 13px; color: var(--accent); }
+.dropdown.inline form { display: grid; gap: 8px; margin-top: 8px; }
+.dropdown.inline form button { justify-self: start; }
+@media (prefers-reduced-motion: reduce) { .dropdown > summary::before { transition: none; } }
