@@ -18,7 +18,7 @@ import (
 // The web UI: one page that htmx refreshes with server-rendered fragments.
 // It needs no build step and no network: htmx is embedded.
 
-//go:embed ui/page.html ui/resources.html ui/detail.html ui/style.css ui/htmx-2.0.4.min.js
+//go:embed ui/fields.html ui/page.html ui/resources.html ui/detail.html ui/style.css ui/htmx-2.0.4.min.js
 var uiFiles embed.FS
 
 var uiTemplates = template.Must(template.New("").Funcs(template.FuncMap{
@@ -28,8 +28,26 @@ var uiTemplates = template.Must(template.New("").Funcs(template.FuncMap{
 	"decode":    func(s string) decodedRecord { return decodePayload([]byte(s), nil) },
 	"hasPrefix": strings.HasPrefix,
 	"hasSuffix": strings.HasSuffix,
-	"statuses":  func() []string { return []string{"RUNNING", "SUCCEEDED", "FAILED", "TIMED_OUT", "ABORTED"} },
-}).ParseFS(uiFiles, "ui/page.html", "ui/resources.html", "ui/detail.html"))
+	"len64":     func(b []byte) int64 { return int64(len(b)) },
+	"field":     field,
+	"val":       val,
+	"choose":    choose,
+	"choices":   choices,
+	"queueChoices": func(qs []queueSummary) []choice {
+		names := make([]string, len(qs))
+		for i, q := range qs {
+			names[i] = q.Name
+		}
+		return choices("None", names)
+	},
+	"keyTypes":     func() []choice { return keyTypeChoices },
+	"statusFilter": func() []choice { return withEmpty("Any status", executionStatuses) },
+	"keyType":      keyType,
+	"projection":   projection,
+	"status":       statusLabel,
+	"retention":    retention,
+	"enum":         humanEnum,
+}).ParseFS(uiFiles, "ui/fields.html", "ui/page.html", "ui/resources.html", "ui/detail.html"))
 
 func (s *Server) registerUI() {
 	s.control.HandleFunc("GET /_stratus/{$}", func(w http.ResponseWriter, r *http.Request) {

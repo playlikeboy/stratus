@@ -1,0 +1,8 @@
+{{/* The one form control of the UI; build its data with the field function. */}}
+{{define "field"}}{{if eq .Type "checkbox"}}<label class="check"><input type="checkbox" name="{{.Name}}" value="on"{{if .Value}} checked{{end}}> <span>{{.Label}}</span></label>{{else}}<label class="field{{if .Wide}} wide{{end}}">
+  <span class="field-label">{{.Label}}{{if .Required}} <i title="required">*</i>{{end}}</span>
+  {{if .Choices}}<select class="control" name="{{.Name}}"{{if .Required}} required{{end}}>{{range .Choices}}<option value="{{.Value}}"{{if eq .Value $.Value}} selected{{end}}>{{.Label}}</option>{{end}}</select>
+  {{else if .Rows}}<textarea class="control" name="{{.Name}}" rows="{{.Rows}}"{{if .Placeholder}} placeholder="{{.Placeholder}}"{{end}}{{if .Required}} required{{end}}>{{.Value}}</textarea>
+  {{else}}<input class="control" type="{{.Type}}" name="{{.Name}}"{{if .Value}} value="{{.Value}}"{{end}}{{if .Placeholder}} placeholder="{{.Placeholder}}"{{end}}{{if .InputMode}} inputmode="{{.InputMode}}"{{end}}{{if .Required}} required{{end}}>{{end}}
+  {{if .Hint}}<span class="field-hint">{{.Hint}}</span>{{end}}
+</label>{{end}}{{end}}

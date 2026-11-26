@@ -88,7 +88,7 @@ func TestUIQueueOperations(t *testing.T) {
 
 	// A failed message parked in the dead-letter queue goes back to its source.
 	op(t, base, "/_stratus/ui/sqs/jobs-dlq/send", url.Values{"body": {"poison"}})
-	if _, page := get(t, base+"/_stratus/ui/sqs/jobs-dlq"); !strings.Contains(page, "Dead-letter queue of") {
+	if _, page := get(t, base+"/_stratus/ui/sqs/jobs-dlq"); !strings.Contains(page, "Receives failed messages of") {
 		t.Errorf("the DLQ's page does not name its source queue")
 	}
 	body = op(t, base, "/_stratus/ui/sqs/jobs-dlq/redrive", url.Values{"source": {"jobs"}})
@@ -165,7 +165,7 @@ func TestUIBucketOperations(t *testing.T) {
 func TestUITableOperations(t *testing.T) {
 	_, base := newOpsServer(t)
 	_, page := get(t, base+"/_stratus/ui/dynamodb/orders")
-	for _, want := range []string{"customer", "order_id", "by-status", "global"} {
+	for _, want := range []string{"customer", "order_id", "by-status", "Global"} {
 		if !strings.Contains(page, want) {
 			t.Errorf("table page lacks %q", want)
 		}
@@ -205,7 +205,7 @@ func TestUIMachineOperations(t *testing.T) {
 	if _, page := get(t, base+"/_stratus/ui/states/slow?status=SUCCEEDED"); !strings.Contains(page, "No execution matches.") {
 		t.Errorf("a running execution shows under SUCCEEDED")
 	}
-	if body := op(t, base, "/_stratus/ui/states/slow/stop", url.Values{"execution": {"nightly"}}); !strings.Contains(body, "Stopped nightly.") || !strings.Contains(body, "ABORTED") {
+	if body := op(t, base, "/_stratus/ui/states/slow/stop", url.Values{"execution": {"nightly"}}); !strings.Contains(body, "Stopped nightly.") || !strings.Contains(body, "Stopped") {
 		t.Fatalf("stop: %.300s", body)
 	}
 }

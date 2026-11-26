@@ -20,9 +20,9 @@ func (s *Server) registerUIResources() {
 	}
 	create("queue", s.createQueue)
 	create("stream", func(r *http.Request) (string, error) {
-		name := field(r, "name")
+		name := formValue(r, "name")
 		shards := 1
-		if v := field(r, "shards"); v != "" {
+		if v := formValue(r, "shards"); v != "" {
 			n, err := strconv.Atoi(v)
 			if err != nil {
 				return "", errors.New("the shard count must be a whole number")
@@ -33,7 +33,7 @@ func (s *Server) registerUIResources() {
 			map[string]any{"StreamName": name, "ShardCount": shards})
 	})
 	create("bucket", func(r *http.Request) (string, error) {
-		name := field(r, "name")
+		name := formValue(r, "name")
 		body := "<CreateBucketConfiguration><LocationConstraint>" + s.identity.Region + "</LocationConstraint></CreateBucketConfiguration>"
 		if err := s.callS3Path(http.MethodPut, "/"+name, body); err != nil {
 			return "", err
@@ -48,7 +48,7 @@ func (s *Server) registerUIResources() {
 	})
 	create("table", s.createTable)
 	create("machine", func(r *http.Request) (string, error) {
-		name := field(r, "name")
+		name := formValue(r, "name")
 		return "Created state machine " + name + ".", s.callJSON("AWSStepFunctions.CreateStateMachine", "application/x-amz-json-1.0",
 			map[string]string{"name": name, "definition": r.FormValue("definition"), "roleArn": s.identity.ARN("iam", "role/stratus")})
 	})
@@ -125,13 +125,13 @@ func (s *Server) objectChange(do func(bucket, key string, r *http.Request) (stri
 }
 
 func (s *Server) createQueue(r *http.Request) (string, error) {
-	name := field(r, "name")
+	name := formValue(r, "name")
 	attrs := map[string]string{}
 	if strings.HasSuffix(name, ".fifo") {
 		attrs["FifoQueue"] = "true"
 	}
-	if dlq := field(r, "dlq"); dlq != "" {
-		count := field(r, "max_receives")
+	if dlq := formValue(r, "dlq"); dlq != "" {
+		count := formValue(r, "max_receives")
 		if count == "" {
 			count = "5"
 		}
@@ -145,11 +145,11 @@ func (s *Server) createQueue(r *http.Request) (string, error) {
 }
 
 func (s *Server) createTable(r *http.Request) (string, error) {
-	name := field(r, "name")
-	attrDefs := []map[string]string{{"AttributeName": field(r, "pk"), "AttributeType": field(r, "pk_type")}}
-	keys := []map[string]string{{"AttributeName": field(r, "pk"), "KeyType": "HASH"}}
-	if sk := field(r, "sk"); sk != "" {
-		attrDefs = append(attrDefs, map[string]string{"AttributeName": sk, "AttributeType": field(r, "sk_type")})
+	name := formValue(r, "name")
+	attrDefs := []map[string]string{{"AttributeName": formValue(r, "pk"), "AttributeType": formValue(r, "pk_type")}}
+	keys := []map[string]string{{"AttributeName": formValue(r, "pk"), "KeyType": "HASH"}}
+	if sk := formValue(r, "sk"); sk != "" {
+		attrDefs = append(attrDefs, map[string]string{"AttributeName": sk, "AttributeType": formValue(r, "sk_type")})
 		keys = append(keys, map[string]string{"AttributeName": sk, "KeyType": "RANGE"})
 	}
 	if err := s.callJSON("DynamoDB_20120810.CreateTable", "application/x-amz-json-1.0", map[string]any{
@@ -157,7 +157,7 @@ func (s *Server) createTable(r *http.Request) (string, error) {
 	}); err != nil {
 		return "", err
 	}
-	if ttl := field(r, "ttl"); ttl != "" {
+	if ttl := formValue(r, "ttl"); ttl != "" {
 		if err := s.callJSON("DynamoDB_20120810.UpdateTimeToLive", "application/x-amz-json-1.0", map[string]any{
 			"TableName": name, "TimeToLiveSpecification": map[string]any{"Enabled": true, "AttributeName": ttl},
 		}); err != nil {
@@ -178,4 +178,4 @@ func (s *Server) callS3Path(method, target, body string) error {
 	return s.serve(req)
 }
 
-func field(r *http.Request, name string) string { return strings.TrimSpace(r.FormValue(name)) }
+func formValue(r *http.Request, name string) string { return strings.TrimSpace(r.FormValue(name)) }

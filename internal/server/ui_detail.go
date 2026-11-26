@@ -3,7 +3,6 @@ package server
 import (
 	"encoding/json"
 	"fmt"
-	"maps"
 	"mime"
 	"net/http"
 	"net/url"
@@ -70,9 +69,10 @@ func filtersOf(r *http.Request) filters {
 }
 
 type queueInfo struct {
-	Attributes []attribute
-	DLQ        string   // the queue this one sends failed messages to
-	Sources    []string // the queues that send their failed messages here
+	Attributes  []attribute
+	DLQ         string   // the queue this one sends failed messages to
+	MaxReceives string   // receives before a message moves to the DLQ
+	Sources     []string // the queues that send their failed messages here
 }
 
 type attribute struct{ Name, Value string }
@@ -137,13 +137,15 @@ func (s *Server) loadQueue(p *detailPage, _ *http.Request) error {
 		return err
 	}
 	info := &queueInfo{}
-	for _, k := range slices.Sorted(maps.Keys(attrs)) {
-		info.Attributes = append(info.Attributes, attribute{k, attrs[k]})
+	info.Attributes = labelledAttributes(attrs)
+	var redrive struct {
+		DeadLetterTargetArn string
+		MaxReceiveCount     json.Number
 	}
-	var redrive struct{ DeadLetterTargetArn string }
 	if json.Unmarshal([]byte(attrs["RedrivePolicy"]), &redrive) == nil && redrive.DeadLetterTargetArn != "" {
 		arn := redrive.DeadLetterTargetArn
 		info.DLQ = arn[strings.LastIndex(arn, ":")+1:]
+		info.MaxReceives = redrive.MaxReceiveCount.String()
 	}
 	info.Sources, _, _ = s.targets.SQS.ListDeadLetterSourceQueues(p.Name, 1000, "")
 	for i, u := range info.Sources {
