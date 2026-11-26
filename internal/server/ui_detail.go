@@ -97,6 +97,7 @@ func (s *Server) registerUIDetails() {
 	s.control.HandleFunc("GET /_stratus/ui/s3/{name}/object", s.uiDetail("object", "S3", s.loadObject))
 	s.control.HandleFunc("GET /_stratus/ui/s3/{name}/download", s.handleUIDownload)
 	s.registerUIOperations()
+	s.registerUIResources()
 }
 
 func (s *Server) detail(prefix, kind, service string, load func(*detailPage, *http.Request) error) {

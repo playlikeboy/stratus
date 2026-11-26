@@ -101,3 +101,9 @@ form.op button { justify-self: start; }
 td.actions { display: flex; gap: 10px; align-items: center; }
 td.small, .key.small { font-size: 11px; color: var(--muted); }
 a.button { font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); }
+label.check { display: flex; gap: 6px; align-items: center; font-size: 13px; }
+.hint { margin: 0; color: var(--muted); font-size: 12px; }
+details.edit { border-top: 1px dashed var(--line); padding-top: 6px; }
+details.edit summary { cursor: pointer; color: var(--accent); font-size: 13px; font-weight: 600; }
+details.edit form { display: grid; gap: 8px; margin-top: 8px; }
+details.edit form button { justify-self: start; }

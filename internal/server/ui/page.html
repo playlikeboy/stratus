@@ -10,10 +10,42 @@
 <body>
 {{template "header" .}}
 <main>
+  <details class="ops"><summary>Create a resource</summary><div class="ops-grid">
+    <form class="op" hx-post="/_stratus/ui/create/queue" hx-target="#resources" hx-swap="innerHTML">
+      <h3>Queue</h3>
+      <input name="name" required placeholder="Name; ending in .fifo makes a FIFO queue" aria-label="Queue name">
+      <div class="row"><select name="dlq" aria-label="Dead-letter queue"><option value="">No dead-letter queue</option>{{range .Queues}}<option>{{.Name}}</option>{{end}}</select>
+      <input name="max_receives" inputmode="numeric" placeholder="Max receives (5)" aria-label="Receives before the dead-letter queue"></div>
+      <button>Create queue</button></form>
+    <form class="op" hx-post="/_stratus/ui/create/stream" hx-target="#resources" hx-swap="innerHTML">
+      <h3>Stream</h3>
+      <input name="name" required placeholder="Name" aria-label="Stream name">
+      <input name="shards" inputmode="numeric" placeholder="Shards (1)" aria-label="Shard count">
+      <button>Create stream</button></form>
+    <form class="op" hx-post="/_stratus/ui/create/bucket" hx-target="#resources" hx-swap="innerHTML">
+      <h3>Bucket</h3>
+      <input name="name" required placeholder="Name, lower case" aria-label="Bucket name">
+      <label class="check"><input type="checkbox" name="versioning" value="on"> Versioning</label>
+      <button>Create bucket</button></form>
+    <form class="op" hx-post="/_stratus/ui/create/table" hx-target="#resources" hx-swap="innerHTML">
+      <h3>Table</h3>
+      <input name="name" required placeholder="Name" aria-label="Table name">
+      <div class="row"><input name="pk" required placeholder="Partition key" aria-label="Partition key name">{{template "keytype" "pk_type"}}</div>
+      <div class="row"><input name="sk" placeholder="Sort key (optional)" aria-label="Sort key name">{{template "keytype" "sk_type"}}</div>
+      <input name="ttl" placeholder="TTL attribute (optional)" aria-label="TTL attribute">
+      <button>Create table</button></form>
+    <form class="op" hx-post="/_stratus/ui/create/machine" hx-target="#resources" hx-swap="innerHTML">
+      <h3>State machine</h3>
+      <input name="name" required placeholder="Name" aria-label="State machine name">
+      <textarea name="definition" rows="4" required aria-label="Definition in Amazon States Language">{"StartAt": "Done", "States": {"Done": {"Type": "Pass", "End": true}}}</textarea>
+      <button>Create state machine</button></form>
+  </div></details>
   <div id="resources" hx-get="/_stratus/ui/resources" hx-trigger="every 2s" hx-swap="innerHTML">{{template "resources.html" .}}</div>
 </main>
 </body>
 </html>
+
+{{define "keytype"}}<select name="{{.}}" aria-label="Key type"><option value="S">String</option><option value="N">Number</option><option value="B">Binary</option></select>{{end}}
 
 {{define "header"}}<header>
   <h1><a href="/_stratus/ui">strat<span>us</span></a></h1>
@@ -22,5 +54,5 @@
   <span class="spacer"></span>
   <button hx-post="/_stratus/ui/expire-ttl" hx-target="#resources" hx-swap="innerHTML">Expire TTL</button>
   <button class="danger" hx-post="/_stratus/ui/reset" hx-target="#resources" hx-swap="innerHTML"
-    hx-confirm="Drop all data and recreate the manifest's resources?">Reset</button>
+    hx-confirm="Drop all data and resources and recreate the manifest's?">Reset</button>
 </header>{{end}}

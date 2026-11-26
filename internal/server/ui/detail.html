@@ -6,6 +6,13 @@
 <title>{{.Name}} · stratus</title>
 <link rel="stylesheet" href="/_stratus/ui/style.css">
 <script src="/_stratus/ui/htmx.min.js"></script>
+<script>
+// The data refreshes every 3 s, except while something in it is being edited.
+function editing() {
+  const d = document.getElementById("detail");
+  return !!d && (d.querySelector("details[open]") !== null || d.contains(document.activeElement));
+}
+</script>
 </head>
 <body>
 <header>
@@ -25,7 +32,7 @@
   </form>
   <details class="ops"><summary>Operations</summary><div class="ops-grid">{{template "operations" .}}</div></details>
   {{end}}
-  <div id="detail" hx-get="{{.Self}}" hx-trigger="every 3s" hx-include="#filters" hx-swap="innerHTML">{{template "detail-body" .}}</div>
+  <div id="detail" hx-get="{{.Self}}" hx-trigger="every 3s [!editing()]" hx-include="#filters" hx-swap="innerHTML">{{template "detail-body" .}}</div>
   {{end}}
 </main>
 </body>
@@ -91,7 +98,8 @@
 {{end}}
 
 {{/* ---------- operations: each form posts with the filters and refreshes #detail ---------- */}}
-{{define "operations"}}
+{{define "operations"}}{{template "ops" .}}{{template "delete-resource" .}}{{end}}
+{{define "ops"}}
 {{if eq .Kind "queue"}}
   <form class="op" hx-post="{{.Self}}/send" hx-target="#detail" hx-swap="innerHTML" hx-include="#filters">
     <h3>Send a message</h3>
@@ -112,6 +120,7 @@
     <input name="partition_key" required placeholder="Partition key" aria-label="Partition key of the new record">
     <textarea name="data" rows="4" required placeholder='{"event": "page_view"}' aria-label="Record data"></textarea>
     <button>Put</button></form>
+  <div class="op"><h3>Change or delete records</h3><p>Not possible: a Kinesis stream is an append-only log. Records leave it only when they pass the retention period.</p></div>
 {{end}}
 {{if eq .Kind "bucket"}}
   <form class="op" hx-post="{{.Self}}/upload" hx-encoding="multipart/form-data" hx-target="#detail" hx-swap="innerHTML" hx-include="#filters">
@@ -119,6 +128,12 @@
     <input type="file" name="file" required aria-label="File">
     <input name="object" placeholder="Key; empty: the file's name, or ends with / for a folder" aria-label="Object key">
     <button>Upload</button></form>
+  <form class="op" hx-post="{{.Self}}/put-text" hx-target="#detail" hx-swap="innerHTML" hx-include="#filters">
+    <h3>New text object</h3>
+    <input name="object" required placeholder="Key, for example notes/today.txt" aria-label="Object key">
+    <input name="content_type" placeholder="Content type (text/plain)" aria-label="Content type">
+    <textarea name="content" rows="4" aria-label="Content"></textarea>
+    <button>Store</button></form>
   <form class="op" hx-post="{{.Self}}/empty" hx-target="#detail" hx-swap="innerHTML" hx-include="#filters" hx-confirm="Delete every object of {{.Name}}?">
     <h3>Empty</h3><p>Delete every object and version, without notifications.</p><button class="danger">Empty the bucket</button></form>
 {{end}}
@@ -140,8 +155,14 @@
     <input name="execution" placeholder="Name; empty: generated" aria-label="Execution name">
     <textarea name="input" rows="4" placeholder="{}" aria-label="Input JSON"></textarea>
     <button>Start</button></form>
+  <div class="op"><h3>Executions</h3><p>An execution cannot be changed; a running one can be stopped from its row.</p></div>
 {{end}}
 {{end}}
+
+{{define "delete-resource"}}<form class="op" hx-post="{{.Self}}/delete-resource" hx-target="#detail" hx-swap="afterbegin"
+    hx-confirm="Delete {{.Name}} and everything in it? Reset brings back only what the manifest declares.">
+    <h3>Delete this {{.Kind}}</h3><p>{{if eq .Kind "bucket"}}Its objects are deleted first.{{else}}With everything it holds.{{end}}</p>
+    <button class="danger">Delete {{.Name}}</button></form>{{end}}
 
 {{/* ---------- the polled part: what happened, then the data ---------- */}}
 {{define "detail-body"}}
@@ -157,6 +178,12 @@
       <span class="spacer"></span>
       <form hx-post="{{$.Self}}/delete" hx-target="#detail" hx-swap="innerHTML" hx-include="#filters" hx-confirm="Delete this message?"><input type="hidden" name="id" value="{{.ID}}"><button class="small danger">Delete</button></form></div>
     <pre>{{(decode .Body).Text}}</pre>
+    <details class="edit"><summary>Edit</summary>
+      <form hx-post="{{$.Self}}/replace" hx-target="#detail" hx-swap="innerHTML" hx-include="#filters">
+        <input type="hidden" name="id" value="{{.ID}}">
+        <textarea name="body" rows="5" required aria-label="New body">{{.Body}}</textarea>
+        <p class="hint">SQS cannot change a message: saving deletes this one and sends a new one with the same attributes, at the end of the queue.</p>
+        <button>Save as a new message</button></form></details>
     {{if .Attributes}}<div class="meta">{{range $k, $v := .Attributes}}<span>{{$k}} <b>{{if $v.StringValue}}{{deref $v.StringValue}}{{else}}{{len $v.BinaryValue}} bytes{{end}}</b> <small>{{$v.DataType}}</small></span>{{end}}</div>{{end}}
   </div>{{else}}<div class="none">{{if .F.Q}}No message matches.{{else}}The queue is empty.{{end}}</div>{{end}}
 </div>{{end}}
@@ -182,10 +209,28 @@
 {{if eq .Kind "object"}}{{with .Object}}<div class="entry">
   {{template "decoded" .Head}}
   {{if not .Whole}}<div class="meta">Showing the first {{bytes 65536}}; download the object for all of it.</div>{{end}}
+  <div id="object-notice"></div>
+  {{if and .Whole .Head.Editable}}<details class="edit"><summary>Edit</summary>
+    <form hx-post="/_stratus/ui/s3/{{$.Name}}/object/save" hx-target="#object-notice" hx-swap="innerHTML">
+      <input type="hidden" name="key" value="{{.View.Key}}"><input type="hidden" name="content_type" value="{{.View.ContentType}}">
+      <textarea name="content" rows="12" aria-label="Content">{{.Head.Text}}</textarea>
+      <p class="hint">Saving stores the text as shown{{if .Head.Layers}} (JSON indented){{end}}, as a PUT does: a new version on a versioned bucket.</p>
+      <button>Save</button></form></details>{{end}}
+  <form hx-post="/_stratus/ui/s3/{{$.Name}}/object/delete" hx-target="#object-notice" hx-swap="innerHTML" hx-confirm="Delete {{.View.Key}}?">
+    <input type="hidden" name="key" value="{{.View.Key}}"><button class="danger">Delete the object</button></form>
 </div>{{end}}{{end}}
 
 {{if eq .Kind "table"}}<div class="list">{{range .Items}}
-  <div class="entry"><pre>{{.}}</pre></div>{{else}}<div class="none">{{if or .F.Q .F.Key .F.Index}}No item matches.{{else}}The table is empty.{{end}}</div>{{end}}
+  <div class="entry">
+    <div class="meta"><span class="spacer"></span>
+      <form hx-post="{{$.Self}}/delete" hx-target="#detail" hx-swap="innerHTML" hx-include="#filters" hx-confirm="Delete this item?"><input type="hidden" name="item" value="{{.}}"><button class="small danger">Delete</button></form></div>
+    <pre>{{.}}</pre>
+    <details class="edit"><summary>Edit</summary>
+      <form hx-post="{{$.Self}}/put" hx-target="#detail" hx-swap="innerHTML" hx-include="#filters">
+        <textarea name="item" rows="8" required aria-label="Item in DynamoDB JSON">{{.}}</textarea>
+        <p class="hint">Saving replaces the item. Changing its key makes a new item and keeps this one.</p>
+        <button>Save</button></form></details>
+  </div>{{else}}<div class="none">{{if or .F.Q .F.Key .F.Index}}No item matches.{{else}}The table is empty.{{end}}</div>{{end}}
 </div>{{end}}
 
 {{if eq .Kind "machine"}}<div class="list">{{range .Runs}}

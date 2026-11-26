@@ -35,6 +35,20 @@ type decodedRecord struct {
 	Note         string   // why decoding stopped early, if it did
 }
 
+// Editable tells whether the content can be edited as shown and stored back:
+// text or JSON, not compressed and not binary.
+func (d decodedRecord) Editable() bool {
+	if d.Binary || d.Note != "" {
+		return false
+	}
+	for _, l := range d.Layers {
+		if l != "JSON" {
+			return false
+		}
+	}
+	return true
+}
+
 // decodeRecord unwraps a record's data: a KPL aggregate into its user
 // records, then each one's compression and JSON.
 func decodeRecord(data []byte) []decodedRecord {
