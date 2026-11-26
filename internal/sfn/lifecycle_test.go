@@ -49,8 +49,15 @@ func TestDeleteAndResetStopRunningExecutionsWithoutLeaks(t *testing.T) {
 
 	deleted := runningDone(t, f, "doomed", 4)
 	kept := runningDone(t, f, "survivor", 3)
-	if runtime.NumGoroutine() < baseline+7 {
-		t.Fatalf("expected at least 7 execution goroutines, have %d over the baseline", runtime.NumGoroutine()-baseline)
+	// Each execution's goroutine is running: its done channel is open. (A
+	// count of the process's goroutines would also see those of earlier tests
+	// winding down, and fail when one exits meanwhile.)
+	for _, d := range append(append([]<-chan struct{}{}, deleted...), kept...) {
+		select {
+		case <-d:
+			t.Fatal("an execution's goroutine exited before the machine was deleted")
+		default:
+		}
 	}
 
 	if err := f.svc.deleteStateMachine(f.svc.StateMachineARN("doomed")); err != nil {
