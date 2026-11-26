@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/ODudek/stratus/internal/awsapi"
 	"github.com/ODudek/stratus/internal/manifest"
@@ -33,8 +34,9 @@ type Server struct {
 func (s *Server) Client() *http.Client { return s.client }
 
 type options struct {
-	manifest manifest.Manifest
-	tls      bool
+	manifest    manifest.Manifest
+	tls         bool
+	ttlInterval time.Duration
 }
 
 // Option configures Start.
@@ -64,6 +66,12 @@ func WithManifestFile(path string) Option {
 	}
 }
 
+// WithTTLInterval deletes expired DynamoDB items in the background every d,
+// as DynamoDB does. Without it they are deleted only by Server.ExpireTTL.
+func WithTTLInterval(d time.Duration) Option {
+	return func(_ testing.TB, o *options) { o.ttlInterval = d }
+}
+
 // WithTLS serves the emulator over HTTPS; AWS clients must then use
 // Server.Client, which trusts its certificate. The AWS SDK streams a request
 // body it cannot rewind only over HTTPS.
@@ -78,7 +86,7 @@ func Start(tb testing.TB, opts ...Option) *Server {
 	for _, opt := range opts {
 		opt(tb, &o)
 	}
-	inner, err := server.New(server.Config{Manifest: o.manifest, DataDir: tb.TempDir()})
+	inner, err := server.New(server.Config{Manifest: o.manifest, DataDir: tb.TempDir(), TTLInterval: o.ttlInterval})
 	if err != nil {
 		tb.Fatalf("stratustest: %v", err)
 	}
@@ -106,3 +114,7 @@ func (s *Server) Reset() {
 		s.tb.Fatalf("stratustest: reset: %v", err)
 	}
 }
+
+// ExpireTTL deletes the DynamoDB items whose TTL attribute is in the past, as
+// DynamoDB does in the background, and returns how many it deleted.
+func (s *Server) ExpireTTL() int { return s.inner.ExpireTTL() }

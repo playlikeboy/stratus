@@ -27,9 +27,12 @@ An operation that is not emulated answers with an error that names it. Some opti
 settings are accepted and have no effect: server-side encryption, DynamoDB stream and tag settings
 on `CreateTable`, and consumed-capacity reporting.
 
-Time-driven clean-up never runs in the background: SQS drops a message past its retention when
-its queue is next used, while S3 lifecycle expiry, DynamoDB TTL and Kinesis trimming do nothing
-until a test asks for them through the Go API.
+Time-driven clean-up runs in the background only when asked to, so tests stay deterministic. SQS
+drops a message past its retention when its queue is next used. DynamoDB TTL deletes expired items
+every `-ttl-interval` (`stratustest.WithTTLInterval`), or once on `POST /_stratus/expire-ttl`
+(`Server.ExpireTTL`); without either, expired items stay, as in LocalStack by default. Like
+DynamoDB it ignores a TTL attribute that is not a number, and one more than five years in the past.
+S3 lifecycle expiry and Kinesis trimming do nothing until a test asks for them through the Go API.
 
 S3 keeps each object's bytes in a file of a directory of its own, created at start under
 `-data-dir` and removed on exit, so large objects do not hold memory; a file goes once no version
@@ -64,6 +67,7 @@ aws --endpoint-url http://localhost:4566 sqs list-queues
 | `-region` | `eu-central-1` | region of every resource |
 | `-account` | `000000000000` | account id of every resource |
 | `-healthcheck` | | check that a running stratus on `-listen` is ready, then exit |
+| `-ttl-interval` | `0` (off) | how often to delete expired DynamoDB items in the background, for example `1m` |
 | `-data-dir` | user cache dir, else `/var/tmp` | existing directory under which S3 object bytes are kept, in a directory removed on exit |
 | `-tls-listen` | none | address to also serve HTTPS on, for example `:4567` |
 | `-tls-cert`, `-tls-key` | none | certificate and key for HTTPS; a self-signed pair is generated when empty |
@@ -138,6 +142,7 @@ that is not declared is an error at start. `examples/manifest.yaml` is a complet
 |---|---|
 | `GET /_stratus/ready` | `200` once the manifest's resources exist, with the list of services |
 | `POST /_stratus/reset` | drop all state and create the manifest's resources again |
+| `POST /_stratus/expire-ttl` | delete the DynamoDB items past their TTL now; answers `{"deleted": n}` |
 | `GET /_localstack/health` | the same answer in LocalStack's shape, for existing health checks |
 
 ## In a Go test

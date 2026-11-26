@@ -38,6 +38,7 @@ func run(args []string) error {
 	region := flags.String("region", awsapi.DefaultRegion, "region of every resource")
 	account := flags.String("account", awsapi.DefaultAccount, "account id of every resource")
 	healthcheck := flags.Bool("healthcheck", false, "check that a running stratus on -listen is ready, then exit")
+	ttlInterval := flags.Duration("ttl-interval", 0, "how often to delete expired DynamoDB items in the background, for example 1m; 0 only on POST /_stratus/expire-ttl")
 	dataDir := flags.String("data-dir", "", "existing directory to keep S3 object bytes in, under a directory removed on exit; when empty the user's cache directory, else /var/tmp (never /tmp, often a tmpfs held in memory)")
 	var https tlsOptions
 	tlsListen := flags.String("tls-listen", "", "address to also serve HTTPS on, for example :4567")
@@ -64,9 +65,10 @@ func run(args []string) error {
 		resources = loaded
 	}
 	emulator, err := server.New(server.Config{
-		Identity: awsapi.Identity{Account: *account, Region: *region},
-		Manifest: resources,
-		DataDir:  *dataDir,
+		Identity:    awsapi.Identity{Account: *account, Region: *region},
+		Manifest:    resources,
+		DataDir:     *dataDir,
+		TTLInterval: *ttlInterval,
 	})
 	if err != nil {
 		return fmt.Errorf("creating the manifest's resources: %w", err)
