@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>stratus</title>
+<link rel="stylesheet" href="/_stratus/ui/style.css">
+<script src="/_stratus/ui/htmx.min.js"></script>
+<script src="/_stratus/ui/dropdown.js" defer></script>
+</head>
+<body>
+{{template "header" .}}
+<main>
+  <details class="dropdown panel"><summary>Create a resource</summary><div class="create">
+    <form class="create-type" hx-get="/_stratus/ui/create-form" hx-target="#create-form" hx-swap="innerHTML" hx-trigger="change">
+      {{template "field" (field "type" "Resource type" | choose resourceTypes)}}
+    </form>
+    <div id="create-form">{{template "create-form" .}}</div>
+  </div></details>
+  <div id="resources" hx-get="/_stratus/ui/resources" hx-trigger="every 2s" hx-swap="innerHTML">{{template "resources.html" .}}</div>
+</main>
+</body>
+</html>
+
+{{define "header"}}<header>
+  <h1><a href="/_stratus/ui">strat<span>us</span></a></h1>
+  <span class="pill">{{.Region}}</span>
+  <span class="pill">account {{.Account}}</span>
+  <span class="spacer"></span>
+  <button hx-post="/_stratus/ui/expire-ttl" hx-target="#resources" hx-swap="innerHTML">Expire TTL</button>
+  <button class="danger" hx-post="/_stratus/ui/reset" hx-target="#resources" hx-swap="innerHTML"
+    hx-confirm="Drop all data and resources and recreate the manifest's?">Reset</button>
+</header>{{end}}
+
+{{/* The settings of the chosen kind of resource; .Kind is empty until one is chosen. */}}
+{{define "create-form"}}
+{{if eq .Kind ""}}<p class="hint">Choose a type to set up the new resource.</p>{{end}}
+{{if eq .Kind "queue"}}<form class="op" hx-post="/_stratus/ui/create/queue" hx-target="#resources" hx-swap="innerHTML">
+  {{template "field" (field "name" "Name" "required" "placeholder=orders" "hint=A name ending in .fifo makes a FIFO queue.")}}
+  <div class="row">{{template "field" (field "dlq" "Dead-letter queue" | choose (queueChoices .Queues))}}
+  {{template "field" (field "max_receives" "Receives before it" "inputmode=numeric" "placeholder=5")}}</div>
+  <button>Create queue</button></form>{{end}}
+{{if eq .Kind "stream"}}<form class="op" hx-post="/_stratus/ui/create/stream" hx-target="#resources" hx-swap="innerHTML">
+  {{template "field" (field "name" "Name" "required" "placeholder=events")}}
+  {{template "field" (field "shards" "Shards" "inputmode=numeric" "placeholder=1")}}
+  <button>Create stream</button></form>{{end}}
+{{if eq .Kind "bucket"}}<form class="op" hx-post="/_stratus/ui/create/bucket" hx-target="#resources" hx-swap="innerHTML">
+  {{template "field" (field "name" "Name" "required" "placeholder=documents" "hint=Lower-case letters, digits, dots and hyphens.")}}
+  {{template "field" (field "versioning" "Keep every version of an object" "type=checkbox")}}
+  <button>Create bucket</button></form>{{end}}
+{{if eq .Kind "table"}}<form class="op" hx-post="/_stratus/ui/create/table" hx-target="#resources" hx-swap="innerHTML">
+  {{template "field" (field "name" "Name" "required" "placeholder=orders")}}
+  <div class="row">{{template "field" (field "pk" "Partition key" "required" "placeholder=customer")}}
+  {{template "field" (field "pk_type" "Type" | choose keyTypes)}}</div>
+  <div class="row">{{template "field" (field "sk" "Sort key" "placeholder=Optional")}}
+  {{template "field" (field "sk_type" "Type" | choose keyTypes)}}</div>
+  {{template "field" (field "ttl" "Time-to-live attribute" "placeholder=Optional, for example expires_at")}}
+  <button>Create table</button></form>{{end}}
+{{if eq .Kind "machine"}}<form class="op" hx-post="/_stratus/ui/create/machine" hx-target="#resources" hx-swap="innerHTML">
+  {{template "field" (field "name" "Name" "required" "placeholder=nightly-report")}}
+  {{template "field" (field "definition" "Definition (Amazon States Language)" "rows=5" "required" | val `{"StartAt": "Done", "States": {"Done": {"Type": "Pass", "End": true}}}`)}}
+  <button>Create state machine</button></form>{{end}}
+{{end}}

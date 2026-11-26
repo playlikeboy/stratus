@@ -1,0 +1,24 @@
+{{/* The one form control of the UI; build its data with the field function. */}}
+{{define "field"}}{{if eq .Type "checkbox"}}<label class="check"><input type="checkbox" name="{{.Name}}" value="on"{{if .Value}} checked{{end}}> <span>{{.Label}}</span></label>
+{{else if .Choices}}{{template "dropdown" .}}
+{{else}}<label class="field{{if .Wide}} wide{{end}}">
+  <span class="field-label">{{.Label}}{{if .Required}} <i title="required">*</i>{{end}}</span>
+  {{if .Rows}}<textarea class="control" name="{{.Name}}" rows="{{.Rows}}"{{if .Placeholder}} placeholder="{{.Placeholder}}"{{end}}{{if .Required}} required{{end}}>{{.Value}}</textarea>
+  {{else}}<input class="control" type="{{.Type}}" name="{{.Name}}"{{if .Value}} value="{{.Value}}"{{end}}{{if .Placeholder}} placeholder="{{.Placeholder}}"{{end}}{{if .InputMode}} inputmode="{{.InputMode}}"{{end}}{{if .Required}} required{{end}}>{{end}}
+  {{if .Hint}}<span class="field-hint">{{.Hint}}</span>{{end}}
+</label>{{end}}{{end}}
+
+{{/* The one dropdown: a button and a menu of options, driven by
+     ui/dropdown.js; the value travels in the hidden input. */}}
+{{define "dropdown"}}{{$id := uid}}{{$chosen := .Chosen}}<div class="field">
+  <span class="field-label" id="{{$id}}-label">{{.Label}}{{if .Required}} <i title="required">*</i>{{end}}</span>
+  <div class="select{{if eq $chosen.Value ""}} empty{{end}}" data-select>
+    <input type="hidden" name="{{.Name}}" value="{{$chosen.Value}}">
+    <button type="button" class="control select-button" role="combobox" aria-haspopup="listbox" aria-expanded="false"
+      aria-controls="{{$id}}-menu" aria-labelledby="{{$id}}-label {{$id}}-value"><span class="select-value" id="{{$id}}-value">{{$chosen.Label}}</span></button>
+    <ul class="select-menu" role="listbox" id="{{$id}}-menu" aria-labelledby="{{$id}}-label" hidden>
+      {{range $i, $c := .Choices}}<li role="option" id="{{$id}}-{{$i}}" data-value="{{$c.Value}}" aria-selected="{{eq $c.Value $chosen.Value}}">{{$c.Label}}</li>{{end}}
+    </ul>
+  </div>
+  {{if .Hint}}<span class="field-hint">{{.Hint}}</span>{{end}}
+</div>{{end}}

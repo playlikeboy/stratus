@@ -1,0 +1,182 @@
+:root {
+  --bg: #eef1f5; --card: #ffffff; --line: #dde2ea; --text: #17202c; --muted: #677285;
+  --accent: #5b5bd6; --amber: #c47f00; --red: #d03b3b; --green: #1e8e57; --notice: #ecebff;
+  --code: #f5f6fa; --shadow: 0 1px 2px rgba(20, 30, 50, .06), 0 2px 8px rgba(20, 30, 50, .05);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1218; --card: #181d26; --line: #273041; --text: #e6eaf2; --muted: #8e99ad;
+    --accent: #9d9dff; --amber: #f2b546; --red: #ff7a7a; --green: #4ecb8d; --notice: #25244a;
+    --code: #11151c; --shadow: none;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+a:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+header { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; padding: 18px 24px 8px; max-width: 1320px; margin: 0 auto; }
+header h1 { margin: 0; font-size: 22px; font-weight: 700; }
+header h1 a { color: var(--text); }
+header h1 span { color: var(--accent); }
+.pill { font-size: 12px; padding: 3px 9px; border-radius: 999px; background: var(--card); border: 1px solid var(--line); color: var(--muted); }
+.spacer { flex: 1; }
+button { font: inherit; font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--card); color: var(--text); cursor: pointer; }
+button:hover { border-color: var(--accent); color: var(--accent); }
+button.danger { color: var(--red); }
+button.danger:hover { border-color: var(--red); }
+button.small { font-size: 12px; padding: 3px 9px; }
+main { max-width: 1320px; margin: 0 auto; padding: 8px 24px 48px; }
+h2 { font-size: 15px; margin: 24px 0 10px; display: flex; gap: 8px; align-items: baseline; }
+h2 small { color: var(--muted); font-weight: 400; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.card { background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--line); border-radius: 12px;
+  padding: 12px 14px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.card.amber { border-left-color: var(--amber); }
+.card.red { border-left-color: var(--red); }
+.card.green { border-left-color: var(--green); }
+.name { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.big { font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.big small { font-size: 13px; font-weight: 500; color: var(--muted); margin-left: 4px; }
+.stats { display: flex; flex-wrap: wrap; gap: 4px 12px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.stats b { color: var(--text); font-weight: 600; }
+.stats .amber, .amber-text { color: var(--amber); }
+.stats .red, .red-text { color: var(--red); }
+.green-text { color: var(--green); }
+.foot { display: flex; justify-content: space-between; align-items: center; margin-top: auto; }
+.badge { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--bg); color: var(--muted); white-space: nowrap; }
+.none { color: var(--muted); padding: 4px 0; }
+.notice { margin: 4px 0 8px; padding: 10px 14px; border-radius: 10px; background: var(--notice); color: var(--text); font-weight: 600; }
+.notice.error { color: var(--red); }
+.updated { color: var(--muted); font-size: 12px; }
+form { margin: 0; }
+
+/* Detail pages */
+.crumbs { color: var(--muted); font-size: 13px; display: flex; gap: 6px; flex-wrap: wrap; align-items: baseline; }
+.crumbs .name { font-size: 15px; color: var(--text); white-space: normal; overflow-wrap: anywhere; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin: 12px 0; }
+.toolbar .field { flex: 1 1 200px; max-width: 320px; }
+.toolbar-actions { display: flex; gap: 12px; align-items: center; height: 38px; }
+.list { display: grid; gap: 10px; }
+.entry { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; display: grid; gap: 6px; min-width: 0; }
+.entry .meta { display: flex; flex-wrap: wrap; gap: 4px 14px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.entry .meta b { color: var(--text); font-weight: 600; }
+pre { margin: 0; padding: 8px 10px; background: var(--code); border-radius: 8px; overflow-x: auto; max-height: 360px;
+  font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.scroll { overflow-x: auto; background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 8px 14px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+th { font-size: 12px; font-weight: 600; color: var(--muted); }
+td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+td.key { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; white-space: normal; overflow-wrap: anywhere; }
+
+/* Detail pages: settings, search, operations */
+.info { margin: 14px 0; display: grid; gap: 10px; }
+.info dl { margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px 16px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+.info dl > div { min-width: 0; }
+.info dt { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.info dd { margin: 2px 0 0; font-size: 13px; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+code { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code); padding: 1px 5px; border-radius: 4px; }
+.ops-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; margin-top: 10px; }
+form.op { display: grid; gap: 8px; align-content: start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; min-width: 0; }
+form.op h3 { margin: 0; font-size: 14px; }
+form.op p { margin: 0; color: var(--muted); font-size: 12px; }
+form.op button { justify-self: start; }
+.entry .meta .spacer { flex: 1; }
+.entry .meta form { margin-left: auto; }
+.decoded { display: grid; gap: 4px; }
+.decoded + .decoded { border-top: 1px dashed var(--line); padding-top: 6px; }
+.io { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px; }
+.io small { color: var(--muted); }
+td.actions { display: flex; gap: 10px; align-items: center; }
+td.small, .key.small { font-size: 11px; color: var(--muted); }
+a.button { font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); }
+
+/* Form controls: one field component everywhere (see ui/fields.html). */
+.field { display: grid; gap: 5px; min-width: 0; align-content: start; }
+.field-label { font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .01em; }
+.field-label i { color: var(--red); font-style: normal; }
+.field-hint, .hint { margin: 0; font-size: 12px; color: var(--muted); }
+.control { box-sizing: border-box; width: 100%; min-width: 0; height: 38px; margin: 0; padding: 0 12px;
+  font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--text);
+  background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+  transition: border-color .15s ease, box-shadow .15s ease; }
+.control::placeholder { color: var(--muted); opacity: .75; }
+.control:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.control:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+.control:invalid:not(:placeholder-shown):not(:focus) { border-color: var(--red); }
+textarea.control { height: auto; min-height: 76px; padding: 9px 12px; resize: vertical;
+  font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+select.control { appearance: none; padding-right: 34px; cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23808a99' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 12px center; }
+input[type="file"].control { height: auto; padding: 5px; cursor: pointer; }
+input[type="file"].control::file-selector-button { font: 600 13px system-ui, sans-serif; margin-right: 10px; padding: 6px 12px;
+  border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); cursor: pointer; }
+.check { display: flex; gap: 8px; align-items: center; font-size: 13px; cursor: pointer; }
+.check input { width: 16px; height: 16px; accent-color: var(--accent); margin: 0; }
+.row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+form.op .row .field, form.op > .field { width: 100%; }
+
+/* A whole card opens its resource: the name's link stretches over the card,
+   and the card's own buttons sit above it. */
+.card { position: relative; cursor: pointer; transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease; }
+.card-link { display: block; color: var(--text); }
+.card-link::after { content: ""; position: absolute; inset: 0; border-radius: inherit; z-index: 0; }
+.card-link:hover { text-decoration: none; }
+.card-link:focus-visible { outline: none; }
+.card .foot form, .card .foot .badge { position: relative; z-index: 1; }
+.card:hover { transform: translateY(-2px);
+  border-top-color: color-mix(in srgb, var(--accent) 45%, var(--line)); border-right-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  border-bottom-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  box-shadow: 0 6px 18px rgba(20, 30, 50, .10), 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent); }
+.card:hover .card-link { color: var(--accent); }
+.card:has(.card-link:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.card:active { transform: translateY(0); }
+@media (prefers-reduced-motion: reduce) { .card, .card:hover, .card:active { transform: none; transition: none; } }
+
+/* One dropdown everywhere: a <details class="dropdown"> with a chevron that
+   turns when it opens. "panel" is a section of its own (create, operations,
+   definition); "inline" sits inside an entry (edit). */
+.dropdown > summary { list-style: none; display: flex; align-items: center; gap: 8px; cursor: pointer;
+  font-weight: 600; user-select: none; border-radius: 8px; }
+.dropdown > summary::-webkit-details-marker { display: none; }
+.dropdown > summary::before { content: ""; width: 7px; height: 7px; flex: none; margin: 0 3px;
+  border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg); transition: transform .15s ease; }
+.dropdown[open] > summary::before { transform: rotate(45deg); }
+.dropdown.panel { margin: 4px 0 14px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
+.dropdown.panel > summary { padding: 11px 14px; font-size: 14px; }
+.dropdown.panel > summary:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.dropdown.panel[open] > summary { border-bottom: 1px solid var(--line); border-radius: 12px 12px 0 0; }
+.dropdown.panel > :not(summary) { margin: 12px 14px 14px; }
+.dropdown.inline { border-top: 1px dashed var(--line); padding-top: 6px; }
+.dropdown.inline > summary { display: inline-flex; padding: 2px 6px 2px 0; font-size: 13px; color: var(--accent); }
+.dropdown.inline form { display: grid; gap: 8px; margin-top: 8px; }
+.dropdown.inline form button { justify-self: start; }
+@media (prefers-reduced-motion: reduce) { .dropdown > summary::before { transition: none; } }
+
+/* The one dropdown for choosing a value (ui/fields.html, ui/dropdown.js). */
+.select { position: relative; }
+.select-button { display: flex; align-items: center; justify-content: space-between; gap: 8px; text-align: left; cursor: pointer;
+  font-weight: 400; padding-right: 36px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23808a99' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 12px center; }
+.select-button:hover { color: var(--text); }
+.select-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.select.empty .select-value { color: var(--muted); }
+.select.open .select-button { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 6.5l5-5 5 5' fill='none' stroke='%23808a99' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+.select-menu { position: absolute; z-index: 20; top: calc(100% + 6px); left: 0; right: 0; margin: 0; padding: 5px; list-style: none;
+  max-height: 264px; overflow-y: auto; background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(15, 20, 30, .18), 0 2px 6px rgba(15, 20, 30, .08); }
+.select-menu [role="option"] { display: flex; align-items: center; gap: 8px; padding: 8px 10px 8px 30px; border-radius: 6px;
+  font-size: 14px; cursor: pointer; position: relative; overflow-wrap: anywhere; }
+.select-menu [role="option"].active { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.select-menu [role="option"][aria-selected="true"] { font-weight: 600; color: var(--accent); }
+.select-menu [role="option"][aria-selected="true"]::before { content: ""; position: absolute; left: 11px; top: 50%; width: 9px; height: 5px;
+  border-left: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: translateY(-70%) rotate(-45deg); }
+.create { display: grid; gap: 14px; max-width: 560px; }
+.create form.op { border: 0; padding: 0; }

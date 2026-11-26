@@ -144,6 +144,40 @@ that is not declared is an error at start. `examples/manifest.yaml` is a complet
 | `POST /_stratus/reset` | drop all state and create the manifest's resources again |
 | `POST /_stratus/expire-ttl` | delete the DynamoDB items past their TTL now; answers `{"deleted": n}` |
 | `GET /_localstack/health` | the same answer in LocalStack's shape, for existing health checks |
+| `GET /_stratus/ui` | the web panel, below |
+
+## Web panel
+
+Open `http://localhost:4566/_stratus/ui` in a browser. The overview shows a card per queue,
+stream, bucket, table and state machine with its counts, refreshed every 2 seconds, and creates
+resources of each kind. **Reset** returns to the manifest's state, **Expire TTL** deletes expired
+DynamoDB items.
+
+A resource's name opens its page: its settings, a search suited to the service, its operations and
+its data, refreshed every 3 seconds (not while you edit it).
+
+| Resource | Settings | Search | Change |
+|---|---|---|---|
+| Queue | attributes, dead-letter queue and its sources | text in bodies and attributes | send; edit (a new message replaces the old: SQS cannot change one); delete; purge; redrive a DLQ to its source |
+| Stream | ARN, mode, retention, shards with hash ranges and record counts | partition key, shard, text in the decoded data | put a record (records cannot be changed or deleted) |
+| Bucket | versioning, lifecycle rules, notifications | key prefix and text | upload a file or store text; edit a text object; delete; empty |
+| Table | key schema, indexes, TTL, item count and size | partition key value, in the table or an index; text | put, edit and delete items as DynamoDB JSON |
+| State machine | ARN, type, role, definition | execution status and name | start an execution; stop a running one |
+
+Every resource can also be deleted from its page. Changes go through the emulator's own AWS API,
+so they are validated and have their usual effects, such as S3 notifications to queues.
+
+**Kinesis data is decoded.** A record aggregated by the Kinesis Producer Library is split into its
+user records, each with its partition key; gzip and zlib payloads are decompressed (up to 1 MiB)
+and JSON is indented, so a record reads `KPL → gzip → JSON`. A search by partition key finds an
+aggregate by the keys inside it. zstd is recognised but not decompressed. The same decoding shows
+S3 objects, SQS bodies and execution input and output.
+
+The panel is part of the binary (server-rendered with [htmx](https://htmx.org) 2.0.4, embedded),
+needs no network, and has no login, like the rest of the endpoint: anyone who can reach the port
+can use it. Its changes only accept requests sent by the panel itself (the `HX-Request` header),
+so a page on another site cannot make them in a browser that has the panel open. Downloads are
+sent as attachments, so an uploaded page never runs in the panel.
 
 ## In a Go test
 

@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Name}} · stratus</title>
+<link rel="stylesheet" href="/_stratus/ui/style.css">
+<script src="/_stratus/ui/htmx.min.js"></script>
+<script src="/_stratus/ui/dropdown.js" defer></script>
+<script>
+// The data refreshes every 3 s, except while something in it is being edited.
+function editing() {
+  const d = document.getElementById("detail");
+  return !!d && (d.querySelector("details[open]") !== null || d.contains(document.activeElement));
+}
+</script>
+</head>
+<body>
+<header>
+  <h1><a href="/_stratus/ui">strat<span>us</span></a></h1>
+  <span class="pill">{{.Region}}</span>
+  <span class="pill">account {{.Account}}</span>
+</header>
+<main>
+  <div class="crumbs"><a href="/_stratus/ui">← All resources</a><span>/</span><span>{{.Service}}</span><span>/</span><span class="name">{{.Name}}</span></div>
+  {{if .Error}}<div class="notice error">{{.Error}}</div>{{else}}
+  {{template "info" .}}
+  {{if ne .Kind "object"}}
+  <form id="filters" class="toolbar" hx-get="{{.Self}}" hx-target="#detail" hx-swap="innerHTML" hx-push-url="true">
+    {{template "filters" .}}
+    <div class="toolbar-actions"><button>Search</button><a href="{{.Self}}">Clear</a></div>
+  </form>
+  <details class="dropdown panel"><summary>Operations</summary><div class="ops-grid">{{template "operations" .}}</div></details>
+  {{end}}
+  <div id="detail" hx-get="{{.Self}}" hx-trigger="every 3s [!editing()]" hx-include="#filters" hx-swap="innerHTML">{{template "detail-body" .}}</div>
+  {{end}}
+</main>
+</body>
+</html>
+
+{{/* ---------- settings of the resource ---------- */}}
+{{define "info"}}<section class="info">
+{{if eq .Kind "queue"}}{{with .Queue}}
+  <dl>{{range .Attributes}}<div><dt>{{.Name}}</dt><dd>{{.Value}}</dd></div>{{end}}
+  {{if .DLQ}}<div><dt>Dead-letter queue</dt><dd><a href="/_stratus/ui/sqs/{{.DLQ}}">{{.DLQ}}</a> after {{.MaxReceives}} receives</dd></div>{{end}}
+  {{if .Sources}}<div><dt>Receives failed messages of</dt><dd>{{range $i, $s := .Sources}}{{if $i}}, {{end}}<a href="/_stratus/ui/sqs/{{$s}}">{{$s}}</a>{{end}}</dd></div>{{end}}</dl>
+{{end}}{{end}}
+{{if eq .Kind "stream"}}{{with .Stream}}
+  <dl><div><dt>Capacity mode</dt><dd>{{enum .Mode}}</dd></div><div><dt>Retention</dt><dd>{{retention .RetentionHours}}</dd></div>
+  <div><dt>Shards</dt><dd>{{len .Shards}}</dd></div><div><dt>Created</dt><dd>{{time .Created}}</dd></div>
+  <div><dt>ARN</dt><dd>{{.ARN}}</dd></div></dl>
+  <div class="scroll"><table><tr><th>Shard</th><th class="n">Records</th><th>Hash key range</th></tr>
+  {{range .Shards}}<tr><td class="key">{{.ID}}</td><td class="n">{{.Records}}</td><td class="key small">{{.StartingHashKey}} – {{.EndingHashKey}}</td></tr>{{end}}</table></div>
+{{end}}{{end}}
+{{if eq .Kind "bucket"}}{{with .Bucket}}
+  <dl><div><dt>Versioning</dt><dd>{{if .Versioning}}{{.Versioning}}{{else}}Off{{end}}</dd></div>
+  <div><dt>Region</dt><dd>{{.Region}}</dd></div><div><dt>Created</dt><dd>{{time .Created}}</dd></div>
+  <div><dt>Lifecycle rules</dt><dd>{{range .Lifecycle}}<div>{{if .Prefix}}<code>{{.Prefix}}</code>{{else}}Every key{{end}}{{if .ExpirationDays}}: expires after {{.ExpirationDays}} days{{end}}{{if .NoncurrentDays}}; old versions after {{.NoncurrentDays}} days{{end}}{{if .Disabled}} (disabled){{end}}</div>{{else}}None{{end}}</dd></div>
+  <div><dt>Event notifications</dt><dd>{{range .Notifications}}<div>{{range $i, $e := .Events}}{{if $i}}, {{end}}{{$e}}{{end}} → <code>{{.QueueARN}}</code>{{if .Prefix}} for keys starting <code>{{.Prefix}}</code>{{end}}{{if .Suffix}} ending <code>{{.Suffix}}</code>{{end}}</div>{{else}}None{{end}}</dd></div></dl>
+{{end}}{{end}}
+{{if eq .Kind "table"}}{{with .Table}}
+  <dl><div><dt>Partition key</dt><dd><code>{{.Spec.PartitionKey.Name}}</code> · {{keyType .Spec.PartitionKey.Type}}</dd></div>
+  <div><dt>Sort key</dt><dd>{{with .Spec.SortKey}}<code>{{.Name}}</code> · {{keyType .Type}}{{else}}None{{end}}</dd></div>
+  <div><dt>Time to live</dt><dd>{{if .TTL}}On, attribute <code>{{.TTL}}</code>{{else}}Off{{end}}</dd></div>
+  <div><dt>Items</dt><dd>{{.Items}} · {{bytes .SizeBytes}}</dd></div>
+  <div><dt>Created</dt><dd>{{time .Created}}</dd></div><div><dt>ARN</dt><dd>{{.ARN}}</dd></div></dl>
+  {{if or .Spec.LocalIndexes .Spec.GlobalIndexes}}<div class="scroll"><table><tr><th>Index</th><th>Kind</th><th>Partition key</th><th>Sort key</th><th>Holds</th></tr>
+  {{range .Spec.LocalIndexes}}<tr><td class="key">{{.Name}}</td><td>Local</td><td class="key">{{if .PartitionKey.Name}}{{.PartitionKey.Name}}{{else}}the table's{{end}}</td><td class="key">{{with .SortKey}}{{.Name}} · {{keyType .Type}}{{end}}</td><td>{{projection .Projection.Type .Projection.NonKeyAttributes}}</td></tr>{{end}}
+  {{range .Spec.GlobalIndexes}}<tr><td class="key">{{.Name}}</td><td>Global</td><td class="key">{{.PartitionKey.Name}} · {{keyType .PartitionKey.Type}}</td><td class="key">{{with .SortKey}}{{.Name}} · {{keyType .Type}}{{end}}</td><td>{{projection .Projection.Type .Projection.NonKeyAttributes}}</td></tr>{{end}}
+  </table></div>{{end}}
+{{end}}{{end}}
+{{if eq .Kind "machine"}}{{with .Machine}}
+  <dl><div><dt>Type</dt><dd>{{enum .Type}}</dd></div><div><dt>Role</dt><dd>{{.RoleARN}}</dd></div>
+  <div><dt>Created</dt><dd>{{time .Created}}</dd></div><div><dt>Updated</dt><dd>{{time .Updated}}</dd></div>
+  <div><dt>ARN</dt><dd>{{.ARN}}</dd></div></dl>
+  <details class="dropdown panel"><summary>Definition</summary><pre>{{(decode .Definition).Text}}</pre></details>
+{{end}}{{end}}
+{{if eq .Kind "object"}}{{with .Object}}
+  <dl><div><dt>Key</dt><dd><code>{{.View.Key}}</code></dd></div><div><dt>Size</dt><dd>{{bytes .View.Size}}</dd></div>
+  <div><dt>Last modified</dt><dd>{{time .View.LastModified}}</dd></div>
+  {{if .View.ContentType}}<div><dt>Content type</dt><dd>{{.View.ContentType}}</dd></div>{{end}}
+  <div><dt>ETag</dt><dd>{{.View.ETag}}</dd></div>
+  {{if .View.VersionID}}<div><dt>Version</dt><dd>{{.View.VersionID}}</dd></div>{{end}}</dl>
+  <div class="toolbar"><a class="button" href="/_stratus/ui/s3/{{$.Name}}/download?key={{.View.Key}}">Download</a><a href="/_stratus/ui/s3/{{$.Name}}">← {{$.Name}}</a></div>
+{{end}}{{end}}
+</section>{{end}}
+
+{{/* ---------- search fields ---------- */}}
+{{define "filters"}}
+{{if eq .Kind "queue"}}{{template "field" (field "q" "Text in the body or attributes" "placeholder=order_id" | val .F.Q)}}{{end}}
+{{if eq .Kind "stream"}}{{template "field" (field "key" "Partition key" "placeholder=user-42" | val .F.Key)}}
+  {{template "field" (field "shard" "Shard" | choose (choices "All shards" .Shards) | val .F.Shard)}}
+  {{template "field" (field "q" "Text in the decoded data" "placeholder=mail_accepted" | val .F.Q)}}{{end}}
+{{if eq .Kind "bucket"}}{{template "field" (field "prefix" "Key prefix" "placeholder=reports/" | val .F.Prefix)}}
+  {{template "field" (field "q" "Text in the key" "placeholder=.json" | val .F.Q)}}{{end}}
+{{if eq .Kind "table"}}{{template "field" (field "index" "Search in" | choose (choices "The table" .Indexes) | val .F.Index)}}
+  {{template "field" (field "key" "Partition key value" "placeholder=Exact value" | val .F.Key)}}
+  {{template "field" (field "q" "Text anywhere in the item" | val .F.Q)}}{{end}}
+{{if eq .Kind "machine"}}{{template "field" (field "status" "Status" | choose statusFilter | val .F.Status)}}
+  {{template "field" (field "q" "Execution name contains" | val .F.Q)}}{{end}}
+{{end}}
+
+{{/* ---------- operations: each form posts with the filters and refreshes #detail ---------- */}}
+{{define "operations"}}{{template "ops" .}}{{template "delete-resource" .}}{{end}}
+{{define "ops"}}
+{{if eq .Kind "queue"}}
+  <form class="op" hx-post="{{.Self}}/send" hx-target="#detail" hx-swap="innerHTML" hx-include="#filters">
+    <h3>Send a message</h3>
+    {{template "field" (field "body" "Body" "rows=4" "required" `placeholder={"order_id": 42}`)}}
+    <div class="row">{{template "field" (field "delay" "Delay in seconds" "inputmode=numeric" "placeholder=0")}}
+    {{if hasSuffix .Name ".fifo"}}{{template "field" (field "group" "Message group" "required")}}{{template "field" (field "dedup" "Deduplication id" "hint=Not needed with content-based deduplication")}}{{end}}</div>
+    <button>Send</button></form>
+  {{with .Queue}}{{if .Sources}}<form class="op" hx-post="{{$.Self}}/redrive" hx-target="#detail" hx-swap="innerHTML" hx-include="#filters" hx-confirm="Move every message of {{$.Name}} back to the chosen queue?">
+    <h3>Redrive</h3><p>Move every message of this dead-letter queue back to a queue that sends failures here. Each arrives as a new message.</p>
+    {{template "field" (field "source" "Move to" | choose (choices "" .Sources))}}
+    <button>Move messages back</button></form>{{end}}{{end}}
+  <form class="op" hx-post="{{.Self}}/purge" hx-target="#detail" hx-swap="innerHTML" hx-include="#filters" hx-confirm="Delete every message of {{.Name}}?">
+    <h3>Purge</h3><p>Delete every message, visible or in flight.</p><button class="danger">Purge the queue</button></form>
+{{end}}
+{{if eq .Kind "stream"}}
+  <form class="op" hx-post="{{.Self}}/put" hx-target="#detail" hx-swap="innerHTML" hx-include="#filters">
+    <h3>Put a record</h3>
+    {{template "field" (field "partition_key" "Partition key" "required" "placeholder=user-42")}}
+    {{template "field" (field "data" "Data" "rows=4" "required" `placeholder={"event": "page_view"}`)}}
+    <button>Put</button></form>
+  <div class="op"><h3>Change or delete records</h3><p>Not possible: a Kinesis stream is an append-only log. Records leave it only when they pass the retention period.</p></div>
+{{end}}
+{{if eq .Kind "bucket"}}
+  <form class="op" hx-post="{{.Self}}/upload" hx-encoding="multipart/form-data" hx-target="#detail" hx-swap="innerHTML" hx-include="#filters">
+    <h3>Upload a file</h3>
+    {{template "field" (field "file" "File" "type=file" "required")}}
+    {{template "field" (field "object" "Key" "placeholder=The file's name" "hint=End it with / to put the file in that folder")}}
+    <button>Upload</button></form>
+  <form class="op" hx-post="{{.Self}}/put-text" hx-target="#detail" hx-swap="innerHTML" hx-include="#filters">
+    <h3>New text object</h3>
+    {{template "field" (field "object" "Key" "required" "placeholder=notes/today.txt")}}
+    {{template "field" (field "content_type" "Content type" "placeholder=text/plain")}}
+    {{template "field" (field "content" "Content" "rows=4")}}
+    <button>Store</button></form>
+  <form class="op" hx-post="{{.Self}}/empty" hx-target="#detail" hx-swap="innerHTML" hx-include="#filters" hx-confirm="Delete every object of {{.Name}}?">
+    <h3>Empty</h3><p>Delete every object and version, without notifications.</p><button class="danger">Empty the bucket</button></form>
+{{end}}
+{{if eq .Kind "table"}}
+  <form class="op" hx-post="{{.Self}}/put" hx-target="#detail" hx-swap="innerHTML" hx-include="#filters">
+    <h3>Put an item</h3>
+    {{template "field" (field "item" "Item in DynamoDB JSON" "rows=6" "required" "hint=An item with the same key is replaced." | val .ItemTemplate)}}
+    <button>Put</button></form>
+  <form class="op" hx-post="{{.Self}}/delete" hx-target="#detail" hx-swap="innerHTML" hx-include="#filters" hx-confirm="Delete this item?">
+    <h3>Delete an item</h3>
+    {{template "field" (field "item_key" "Key in DynamoDB JSON" "rows=4" "required" | val .KeyTemplate)}}
+    <button class="danger">Delete</button></form>
+  {{with .Table}}{{if .TTL}}<form class="op" hx-post="{{$.Self}}/expire-ttl" hx-target="#detail" hx-swap="innerHTML" hx-include="#filters">
+    <h3>Expire TTL</h3><p>Delete the items whose <code>{{.TTL}}</code> is in the past, in every table.</p><button>Expire now</button></form>{{end}}{{end}}
+{{end}}
+{{if eq .Kind "machine"}}
+  <form class="op" hx-post="{{.Self}}/start" hx-target="#detail" hx-swap="innerHTML" hx-include="#filters">
+    <h3>Start an execution</h3>
+    {{template "field" (field "execution" "Name" "placeholder=Generated when empty")}}
+    {{template "field" (field "input" "Input JSON" "rows=4" "placeholder={}")}}
+    <button>Start</button></form>
+  <div class="op"><h3>Executions</h3><p>An execution cannot be changed; a running one can be stopped from its row.</p></div>
+{{end}}
+{{end}}
+
+{{define "delete-resource"}}<form class="op" hx-post="{{.Self}}/delete-resource" hx-target="#detail" hx-swap="afterbegin"
+    hx-confirm="Delete {{.Name}} and everything in it? Reset brings back only what the manifest declares.">
+    <h3>Delete {{.Name}}</h3><p>{{if eq .Kind "bucket"}}Its objects are deleted first.{{else}}With everything it holds.{{end}}</p>
+    <button class="danger">Delete</button></form>{{end}}
+
+{{/* ---------- the polled part: what happened, then the data ---------- */}}
+{{define "detail-body"}}
+{{if .Notice}}<div class="notice{{if hasPrefix .Notice "Failed"}} error{{end}}">{{.Notice}}</div>{{end}}
+{{if .Error}}<div class="notice error">{{.Error}}</div>{{else}}
+<div class="updated">Updated {{.At}} · {{.Summary}}</div>
+
+{{if eq .Kind "queue"}}<div class="list">{{range .Messages}}
+  <div class="entry">
+    <div class="meta"><b class="{{if eq .State "in flight"}}amber-text{{else if eq .State "visible"}}green-text{{end}}">{{.State}}</b>
+      <span>Sent <b>{{time .SentAt}}</b></span><span>Received <b>{{.ReceiveCount}}</b>×</span>
+      {{if .GroupID}}<span>Group <b>{{.GroupID}}</b></span>{{end}}<span class="name">{{.ID}}</span>
+      <span class="spacer"></span>
+      <form hx-post="{{$.Self}}/delete" hx-target="#detail" hx-swap="innerHTML" hx-include="#filters" hx-confirm="Delete this message?"><input type="hidden" name="id" value="{{.ID}}"><button class="small danger">Delete</button></form></div>
+    <pre>{{(decode .Body).Text}}</pre>
+    <details class="dropdown inline"><summary>Edit</summary>
+      <form hx-post="{{$.Self}}/replace" hx-target="#detail" hx-swap="innerHTML" hx-include="#filters">
+        <input type="hidden" name="id" value="{{.ID}}">
+        {{template "field" (field "body" "Body" "rows=5" "required" "hint=SQS cannot change a message: saving deletes this one and sends a new one with the same attributes, at the end of the queue." | val .Body)}}
+        <button>Save as a new message</button></form></details>
+    {{if .Attributes}}<div class="meta">{{range $k, $v := .Attributes}}<span>{{$k}} <b>{{if $v.StringValue}}{{deref $v.StringValue}}{{else}}{{len $v.BinaryValue}} bytes{{end}}</b> <small>{{$v.DataType}}</small></span>{{end}}</div>{{end}}
+  </div>{{else}}<div class="none">{{if .F.Q}}No message matches.{{else}}The queue is empty.{{end}}</div>{{end}}
+</div>{{end}}
+
+{{if eq .Kind "stream"}}<div class="list">{{range .Records}}
+  <div class="entry">
+    <div class="meta"><span>{{.Shard}}</span><span>Sequence <b>{{.Sequence}}</b></span><span>Partition key <b>{{.PartitionKey}}</b></span><span>{{time .Arrival}}</span><span>{{bytes (len64 .Data)}}</span>
+      {{if gt (len .Decoded) 1}}<span class="badge">KPL aggregate · {{len .Decoded}} records</span>{{end}}</div>
+    {{range .Decoded}}{{template "decoded" .}}{{end}}
+  </div>{{else}}<div class="none">{{if or .F.Q .F.Key .F.Shard}}No record matches.{{else}}No records.{{end}}</div>{{end}}
+</div>{{end}}
+
+{{if eq .Kind "bucket"}}{{if .Objects}}<div class="scroll"><table>
+  <tr><th>Key</th><th class="n">Size</th><th>Last modified</th><th>Content type</th><th></th></tr>
+  {{range .Objects}}<tr>
+    <td class="key"><a href="/_stratus/ui/s3/{{$.Name}}/object?key={{.Key}}">{{.Key}}</a></td>
+    <td class="n">{{bytes .Size}}</td><td>{{time .LastModified}}</td><td>{{.ContentType}}</td>
+    <td class="actions"><a href="/_stratus/ui/s3/{{$.Name}}/download?key={{.Key}}">Download</a>
+      <form hx-post="{{$.Self}}/delete" hx-target="#detail" hx-swap="innerHTML" hx-include="#filters" hx-confirm="Delete {{.Key}}?"><input type="hidden" name="object" value="{{.Key}}"><button class="small danger">Delete</button></form></td>
+  </tr>{{end}}
+</table></div>{{else}}<div class="none">No objects{{if or .F.Prefix .F.Q}} match{{end}}.</div>{{end}}{{end}}
+
+{{if eq .Kind "object"}}{{with .Object}}<div class="entry">
+  {{template "decoded" .Head}}
+  {{if not .Whole}}<div class="meta">Showing the first {{bytes 65536}}; download the object for all of it.</div>{{end}}
+  <div id="object-notice"></div>
+  {{if and .Whole .Head.Editable}}<details class="dropdown inline"><summary>Edit</summary>
+    <form hx-post="/_stratus/ui/s3/{{$.Name}}/object/save" hx-target="#object-notice" hx-swap="innerHTML">
+      <input type="hidden" name="key" value="{{.View.Key}}"><input type="hidden" name="content_type" value="{{.View.ContentType}}">
+      {{template "field" (field "content" "Content" "rows=12" "hint=Saving stores the text as shown, as a PUT does: a new version on a versioned bucket." | val .Head.Text)}}
+      <button>Save</button></form></details>{{end}}
+  <form hx-post="/_stratus/ui/s3/{{$.Name}}/object/delete" hx-target="#object-notice" hx-swap="innerHTML" hx-confirm="Delete {{.View.Key}}?">
+    <input type="hidden" name="key" value="{{.View.Key}}"><button class="danger">Delete the object</button></form>
+</div>{{end}}{{end}}
+
+{{if eq .Kind "table"}}<div class="list">{{range .Items}}
+  <div class="entry">
+    <div class="meta"><span class="spacer"></span>
+      <form hx-post="{{$.Self}}/delete" hx-target="#detail" hx-swap="innerHTML" hx-include="#filters" hx-confirm="Delete this item?"><input type="hidden" name="item" value="{{.}}"><button class="small danger">Delete</button></form></div>
+    <pre>{{.}}</pre>
+    <details class="dropdown inline"><summary>Edit</summary>
+      <form hx-post="{{$.Self}}/put" hx-target="#detail" hx-swap="innerHTML" hx-include="#filters">
+        {{template "field" (field "item" "Item in DynamoDB JSON" "rows=8" "required" "hint=Saving replaces the item. Changing its key makes a new item and keeps this one." | val .)}}
+        <button>Save</button></form></details>
+  </div>{{else}}<div class="none">{{if or .F.Q .F.Key .F.Index}}No item matches.{{else}}The table is empty.{{end}}</div>{{end}}
+</div>{{end}}
+
+{{if eq .Kind "machine"}}<div class="list">{{range .Runs}}
+  <div class="entry">
+    <div class="meta"><b class="{{if eq .Status "RUNNING"}}amber-text{{else if eq .Status "SUCCEEDED"}}green-text{{else}}red-text{{end}}">{{status .Status}}</b>
+      <span class="name">{{.Name}}</span><span>Started <b>{{time .Started}}</b></span>{{if not .Stopped.IsZero}}<span>Ended <b>{{time .Stopped}}</b></span>{{end}}
+      <span class="spacer"></span>
+      {{if eq .Status "RUNNING"}}<form hx-post="{{$.Self}}/stop" hx-target="#detail" hx-swap="innerHTML" hx-include="#filters" hx-confirm="Stop {{.Name}}?"><input type="hidden" name="execution" value="{{.Name}}"><button class="small danger">Stop</button></form>{{end}}</div>
+    <div class="io"><div><small>Input</small><pre>{{(decode .Input).Text}}</pre></div>
+    {{if .Output}}<div><small>Output</small><pre>{{(decode .Output).Text}}</pre></div>{{end}}</div>
+    {{if .Error}}<div class="meta red-text"><b>{{.Error}}</b> {{.Cause}}</div>{{end}}
+  </div>{{else}}<div class="none">{{if or .F.Q .F.Status}}No execution matches.{{else}}No executions yet.{{end}}</div>{{end}}
+</div>{{end}}
+{{end}}
+{{end}}
+
+{{/* ---------- one decoded payload: how it was unwrapped, then its content ---------- */}}
+{{define "decoded"}}<div class="decoded">
+  {{if or .PartitionKey .Layers .Binary}}<div class="meta">{{if .PartitionKey}}<span>Partition key <b>{{.PartitionKey}}</b></span>{{end}}
+    {{if .Layers}}<span class="badge">{{range $i, $l := .Layers}}{{if $i}} → {{end}}{{$l}}{{end}}</span>{{end}}
+    {{if .Binary}}<span class="badge">Binary, shown as base64</span>{{end}}</div>{{end}}
+  {{if .Note}}<div class="meta amber-text">{{.Note}}</div>{{end}}
+  <pre>{{.Text}}</pre>
+</div>{{end}}
