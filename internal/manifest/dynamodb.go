@@ -1,6 +1,7 @@
 package manifest
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/stratus-emulator/stratus/internal/dynamodb"
@@ -55,7 +56,10 @@ func (d DynamoDB) validate() error {
 
 func (d DynamoDB) apply(tables *dynamodb.Service) error {
 	for _, t := range d.Tables {
-		if err := tables.CreateTable(t.spec()); err != nil {
+		if err := tables.EnsureTable(t.spec()); err != nil {
+			if errors.Is(err, dynamodb.ErrSpecMismatch) {
+				return conflict("dynamodb table", t.Name, err)
+			}
 			return fmt.Errorf("dynamodb table %q: %w", t.Name, err)
 		}
 	}
