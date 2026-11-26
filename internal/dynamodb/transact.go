@@ -3,8 +3,8 @@ package dynamodb
 import (
 	"errors"
 
-	"github.com/ODudek/stratus/internal/dynamodb/attr"
-	"github.com/ODudek/stratus/internal/dynamodb/expr"
+	"github.com/stratus-emulator/stratus/internal/dynamodb/attr"
+	"github.com/stratus-emulator/stratus/internal/dynamodb/expr"
 )
 
 const maxTransactItems = 100

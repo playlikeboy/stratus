@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ODudek/stratus/internal/dynamodb"
-	"github.com/ODudek/stratus/internal/s3"
-	"github.com/ODudek/stratus/internal/sqs"
+	"github.com/stratus-emulator/stratus/internal/dynamodb"
+	"github.com/stratus-emulator/stratus/internal/s3"
+	"github.com/stratus-emulator/stratus/internal/sqs"
 )
 
 // uiPostHeaders posts as the UI does and returns the status, a response

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ODudek/stratus/internal/dynamodb/attr"
+	"github.com/stratus-emulator/stratus/internal/dynamodb/attr"
 )
 
 const fixture = `{

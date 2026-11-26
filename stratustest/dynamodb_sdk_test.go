@@ -8,7 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 
-	"github.com/ODudek/stratus/stratustest"
+	"github.com/stratus-emulator/stratus/stratustest"
 )
 
 const tableManifest = `

@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/ODudek/stratus/internal/awsapi"
+	"github.com/stratus-emulator/stratus/internal/awsapi"
 )
 
 // Receive returns up to in.Max visible messages and hides them for the

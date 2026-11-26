@@ -3,7 +3,7 @@ package expr
 import (
 	"slices"
 
-	"github.com/ODudek/stratus/internal/dynamodb/attr"
+	"github.com/stratus-emulator/stratus/internal/dynamodb/attr"
 )
 
 const keyKind = "KeyConditionExpression"

@@ -4,8 +4,8 @@ import (
 	"errors"
 	"maps"
 
-	"github.com/ODudek/stratus/internal/dynamodb/attr"
-	"github.com/ODudek/stratus/internal/dynamodb/expr"
+	"github.com/stratus-emulator/stratus/internal/dynamodb/attr"
+	"github.com/stratus-emulator/stratus/internal/dynamodb/expr"
 )
 
 // write is a change worked out, and checked, under the lock but not yet

@@ -3,8 +3,8 @@ package dynamodb
 import (
 	"slices"
 
-	"github.com/ODudek/stratus/internal/dynamodb/attr"
-	"github.com/ODudek/stratus/internal/dynamodb/expr"
+	"github.com/stratus-emulator/stratus/internal/dynamodb/attr"
+	"github.com/stratus-emulator/stratus/internal/dynamodb/expr"
 )
 
 // maxPageBytes is how much item data one Query or Scan page reads at most.

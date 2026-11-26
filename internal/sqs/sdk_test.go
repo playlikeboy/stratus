@@ -11,10 +11,10 @@ import (
 	awssqs "github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
 
-	"github.com/ODudek/stratus/internal/awsapi"
-	"github.com/ODudek/stratus/internal/clock"
-	"github.com/ODudek/stratus/internal/gateway"
-	"github.com/ODudek/stratus/internal/sqs"
+	"github.com/stratus-emulator/stratus/internal/awsapi"
+	"github.com/stratus-emulator/stratus/internal/clock"
+	"github.com/stratus-emulator/stratus/internal/gateway"
+	"github.com/stratus-emulator/stratus/internal/sqs"
 )
 
 func newSDKClient(t *testing.T) *awssqs.Client {

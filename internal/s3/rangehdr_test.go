@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/ODudek/stratus/internal/awsapi"
+	"github.com/stratus-emulator/stratus/internal/awsapi"
 )
 
 func TestParseRange(t *testing.T) {

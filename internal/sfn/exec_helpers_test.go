@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ODudek/stratus/internal/awsapi"
-	"github.com/ODudek/stratus/internal/clock"
+	"github.com/stratus-emulator/stratus/internal/awsapi"
+	"github.com/stratus-emulator/stratus/internal/clock"
 )
 
 const sendResource = "arn:aws:states:::sqs:sendMessage"

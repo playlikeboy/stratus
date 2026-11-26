@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ODudek/stratus/internal/awsapi"
-	"github.com/ODudek/stratus/internal/clock"
-	"github.com/ODudek/stratus/internal/gateway"
-	"github.com/ODudek/stratus/internal/sqs"
+	"github.com/stratus-emulator/stratus/internal/awsapi"
+	"github.com/stratus-emulator/stratus/internal/clock"
+	"github.com/stratus-emulator/stratus/internal/gateway"
+	"github.com/stratus-emulator/stratus/internal/sqs"
 )
 
 // queryCall posts a legacy query-protocol request, signed only by a credential

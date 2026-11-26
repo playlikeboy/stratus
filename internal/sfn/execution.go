@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ODudek/stratus/internal/awsapi"
+	"github.com/stratus-emulator/stratus/internal/awsapi"
 )
 
 // execution is one run of a state machine. Its fields are guarded by

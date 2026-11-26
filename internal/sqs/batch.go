@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/ODudek/stratus/internal/awsapi"
+	"github.com/stratus-emulator/stratus/internal/awsapi"
 )
 
 const (

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ODudek/stratus/internal/dynamodb/attr"
+	"github.com/stratus-emulator/stratus/internal/dynamodb/attr"
 )
 
 // table is one table and its items. Items of a partition are kept sorted by

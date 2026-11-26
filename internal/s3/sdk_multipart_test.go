@@ -13,8 +13,8 @@ import (
 	s3sdk "github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 
-	"github.com/ODudek/stratus/internal/clock"
-	"github.com/ODudek/stratus/internal/s3"
+	"github.com/stratus-emulator/stratus/internal/clock"
+	"github.com/stratus-emulator/stratus/internal/s3"
 )
 
 const mib = 1 << 20

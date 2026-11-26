@@ -6,7 +6,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/ODudek/stratus/internal/manifest"
+	"github.com/stratus-emulator/stratus/internal/manifest"
 )
 
 func TestDefaultDataDirIsOnDiskNotTmp(t *testing.T) {

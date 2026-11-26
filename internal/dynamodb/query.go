@@ -3,8 +3,8 @@ package dynamodb
 import (
 	"hash/fnv"
 
-	"github.com/ODudek/stratus/internal/dynamodb/attr"
-	"github.com/ODudek/stratus/internal/dynamodb/expr"
+	"github.com/stratus-emulator/stratus/internal/dynamodb/attr"
+	"github.com/stratus-emulator/stratus/internal/dynamodb/expr"
 )
 
 type queryInput struct {

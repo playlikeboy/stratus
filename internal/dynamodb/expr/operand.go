@@ -1,7 +1,7 @@
 package expr
 
 import (
-	"github.com/ODudek/stratus/internal/dynamodb/attr"
+	"github.com/stratus-emulator/stratus/internal/dynamodb/attr"
 )
 
 // operand is something that yields a value from an item: a path, a

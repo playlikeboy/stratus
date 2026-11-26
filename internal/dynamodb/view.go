@@ -3,7 +3,7 @@ package dynamodb
 import (
 	"slices"
 
-	"github.com/ODudek/stratus/internal/dynamodb/attr"
+	"github.com/stratus-emulator/stratus/internal/dynamodb/attr"
 )
 
 // inIndex reports whether item appears in ix. Secondary indexes are sparse:

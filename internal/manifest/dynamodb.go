@@ -3,7 +3,7 @@ package manifest
 import (
 	"fmt"
 
-	"github.com/ODudek/stratus/internal/dynamodb"
+	"github.com/stratus-emulator/stratus/internal/dynamodb"
 )
 
 type DynamoDB struct {

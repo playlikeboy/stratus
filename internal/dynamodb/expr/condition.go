@@ -4,7 +4,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/ODudek/stratus/internal/dynamodb/attr"
+	"github.com/stratus-emulator/stratus/internal/dynamodb/attr"
 )
 
 // maxInOperands is DynamoDB's limit on the list of an IN.

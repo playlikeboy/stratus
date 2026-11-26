@@ -3,7 +3,7 @@ package sfn
 import (
 	"net/http"
 
-	"github.com/ODudek/stratus/internal/awsapi"
+	"github.com/stratus-emulator/stratus/internal/awsapi"
 )
 
 func apiError(code, message string) *awsapi.Error {
