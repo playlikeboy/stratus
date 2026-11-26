@@ -237,6 +237,20 @@ The emulator stops with the test. `srv.Reset()` returns it to the manifest's sta
 `stratustest.WithTLS()` serves it over HTTPS; pass `srv.Client()` to the AWS client as its
 `HTTPClient`.
 
+## In a test with Testcontainers
+
+The [`testcontainers`](testcontainers) module runs stratus in a container from any Go test, with the
+resources the test declares, in well under a second:
+
+```go
+ctr, err := stratus.Run(ctx, stratus.DefaultImage, stratus.WithManifestYAML(manifest))
+testcontainers.CleanupContainer(t, ctr)
+endpoint, err := ctr.BaseEndpoint(ctx) // BaseEndpoint for any AWS SDK client
+```
+
+Coming from the LocalStack module, its [README](testcontainers/README.md#coming-from-the-localstack-module)
+maps one to the other.
+
 ## Compared with LocalStack
 
 Both in Docker with 1 CPU and 2 GB each, started from the same manifest, driven by the AWS SDK for
