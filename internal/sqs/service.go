@@ -33,8 +33,18 @@ type queue struct {
 	modifiedAt time.Time
 	cfg        config
 	messages   []*message // in delivery order; for a FIFO queue, in sequence order
-	tags       map[string]string
-	fifo       fifoState
+	// receipts finds a message by its current receipt handle, so that deleting
+	// one or changing its visibility does not walk the queue.
+	receipts map[string]*message
+	// deleted counts the messages that are marked deleted but still in messages:
+	// they are removed from the front at once and from the rest in one pass
+	// once they are half of the queue.
+	deleted int
+	// oldestSentAt is no later than the sentAt of every message, so that a
+	// queue with nothing past its retention is not walked.
+	oldestSentAt time.Time
+	tags         map[string]string
+	fifo         fifoState
 	// changed is closed, and replaced, whenever a waiting receiver should look
 	// at the queue again.
 	changed chan struct{}
@@ -55,6 +65,7 @@ type message struct {
 	firstReceivedAt  time.Time
 	receiveCount     int
 	receipt          string
+	deleted          bool // gone from the queue; skipped until it is removed from messages
 }
 
 // MessageAttribute is a message attribute, in its wire form.
@@ -164,7 +175,7 @@ func (s *Service) CreateQueueWithTags(name string, attrs, tags map[string]string
 	if err != nil {
 		return err
 	}
-	q := &queue{name: name, cfg: cfg, tags: map[string]string{}, changed: make(chan struct{})}
+	q := &queue{name: name, cfg: cfg, receipts: map[string]*message{}, tags: map[string]string{}, changed: make(chan struct{})}
 	if err := q.addTags(tags); err != nil {
 		return err
 	}
