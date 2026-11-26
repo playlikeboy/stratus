@@ -33,7 +33,7 @@ type env struct {
 // default settings apart from the endpoint, path style and credentials.
 func start(t *testing.T, c clock.Clock) *env {
 	t.Helper()
-	svc := s3.New(identity, c)
+	svc := s3.New(identity, c, t.TempDir())
 	srv := httptest.NewServer(gateway.New(svc))
 	t.Cleanup(srv.Close)
 	return &env{svc: svc, srv: srv, client: newClient(srv.URL, nil)}
@@ -44,7 +44,7 @@ func start(t *testing.T, c clock.Clock) *env {
 // a trailing checksum, so this covers the streaming upload path.
 func startTLS(t *testing.T) *env {
 	t.Helper()
-	svc := s3.New(identity, clock.System{})
+	svc := s3.New(identity, clock.System{}, t.TempDir())
 	srv := httptest.NewTLSServer(gateway.New(svc))
 	t.Cleanup(srv.Close)
 	return &env{svc: svc, srv: srv, client: newClient(srv.URL, srv.Client())}

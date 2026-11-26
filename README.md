@@ -1,7 +1,8 @@
 # stratus
 
 A local emulator of the AWS services an application needs in development and
-end-to-end tests. One static Go binary, state in memory, ready in milliseconds.
+end-to-end tests. One static Go binary, ready in milliseconds; S3 object bytes are kept on disk,
+all other state in memory.
 
 - **One port, no signature checks.** Every service is served on `:4566`. A request is routed by
   its `X-Amz-Target` header or, failing that, by the service in its SigV4 credential scope. The
@@ -30,6 +31,13 @@ Time-driven clean-up never runs in the background: SQS drops a message past its 
 its queue is next used, while S3 lifecycle expiry, DynamoDB TTL and Kinesis trimming do nothing
 until a test asks for them through the Go API.
 
+S3 keeps each object's bytes in a file of a directory of its own, created at start under
+`-data-dir` and removed on exit, so large objects do not hold memory; a file goes once no version
+refers to it. Without `-data-dir` that directory is in the user's cache directory, else `/var/tmp`,
+never `/tmp`, which is a tmpfs held in memory on many systems. The Docker image uses `/data`;
+mount a volume there to keep the bytes off the container's writable layer. Nothing survives a
+restart: buckets and object metadata are in memory.
+
 ## Run
 
 ```sh
@@ -56,6 +64,7 @@ aws --endpoint-url http://localhost:4566 sqs list-queues
 | `-region` | `eu-central-1` | region of every resource |
 | `-account` | `000000000000` | account id of every resource |
 | `-healthcheck` | | check that a running stratus on `-listen` is ready, then exit |
+| `-data-dir` | user cache dir, else `/var/tmp` | existing directory under which S3 object bytes are kept, in a directory removed on exit |
 | `-tls-listen` | none | address to also serve HTTPS on, for example `:4567` |
 | `-tls-cert`, `-tls-key` | none | certificate and key for HTTPS; a self-signed pair is generated when empty |
 | `-tls-hosts` | `localhost,127.0.0.1,::1` | names and addresses a generated certificate is valid for |

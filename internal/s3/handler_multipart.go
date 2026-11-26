@@ -60,7 +60,11 @@ func (s *Service) uploadPart(w http.ResponseWriter, r *http.Request, bucketName,
 	if err != nil {
 		return err
 	}
-	stored := &part{number: n, data: p.data, etag: etagOf(p.data), checksum: sum}
+	body, err := s.blobs.put(p.data)
+	if err != nil {
+		return err
+	}
+	stored := &part{number: n, body: body, etag: etagOf(p.data), checksum: sum}
 	if err := s.putPart(bucketName, key, u.id, stored); err != nil {
 		return err
 	}
@@ -94,20 +98,28 @@ func (s *Service) uploadPartCopy(w http.ResponseWriter, r *http.Request, bucketN
 	if err != nil {
 		return err
 	}
-	data := src.data
+	off, size := int64(0), src.size()
 	if v := r.Header.Get("x-amz-copy-source-range"); v != "" {
 		rng, ok, err := parseRange(v, src.size())
 		if err != nil || !ok {
 			return errInvalidArgument("The x-amz-copy-source-range value must be of the form bytes=first-last " +
 				"where first and last are the zero-based offsets of the first and last bytes to copy")
 		}
-		data = src.data[rng.start : rng.end+1]
+		off, size = rng.start, rng.end+1-rng.start
+	}
+	data, err := src.body.read(off, size)
+	if err != nil {
+		return err
 	}
 	sum, err := partChecksum(u, checksum{}, data)
 	if err != nil {
 		return err
 	}
-	stored := &part{number: n, data: data, etag: etagOf(data), checksum: sum}
+	body, err := s.blobs.put(data)
+	if err != nil {
+		return err
+	}
+	stored := &part{number: n, body: body, etag: etagOf(data), checksum: sum}
 	if err := s.putPart(bucketName, key, u.id, stored); err != nil {
 		return err
 	}
@@ -152,7 +164,7 @@ func (s *Service) completeMultipartUpload(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		return err
 	}
-	obj, err := assemble(u, parts, objectSize, sent)
+	obj, err := s.assemble(u, parts, objectSize, sent)
 	if err != nil {
 		return err
 	}

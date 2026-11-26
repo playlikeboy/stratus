@@ -1,6 +1,7 @@
 // Package s3 emulates Amazon S3 over its REST protocol with path-style
 // addressing: buckets, versioned objects, multipart uploads, checksums,
-// lifecycle expiration and queue notifications, all held in memory.
+// lifecycle expiration and queue notifications. Object bytes are kept in
+// files of a data directory, everything else in memory.
 package s3
 
 import (
@@ -23,6 +24,7 @@ var validBucketName = regexp.MustCompile(`^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$`)
 type Service struct {
 	identity awsapi.Identity
 	clock    clock.Clock
+	blobs    *blobStore
 
 	mu       sync.RWMutex
 	buckets  map[string]*bucket
@@ -81,8 +83,10 @@ type ObjectOptions struct {
 	Metadata map[string]string
 }
 
-func New(identity awsapi.Identity, c clock.Clock) *Service {
-	return &Service{identity: identity, clock: c, buckets: map[string]*bucket{}}
+// New returns an S3 service that keeps object bytes in files of dataDir, an
+// existing directory it owns; the metadata stays in memory.
+func New(identity awsapi.Identity, c clock.Clock, dataDir string) *Service {
+	return &Service{identity: identity, clock: c, blobs: newBlobStore(dataDir), buckets: map[string]*bucket{}}
 }
 
 func (s *Service) Name() string { return "s3" }
@@ -139,15 +143,18 @@ func (s *Service) PutObject(bucketName, key string, body []byte, opts ObjectOpti
 	if key == "" {
 		return errInvalidArgument("The object key must not be empty.")
 	}
-	data := slices.Clone(body)
+	stored, err := s.blobs.put(body)
+	if err != nil {
+		return err
+	}
 	obj := &object{
 		key:      key,
-		data:     data,
-		etag:     etagOf(data),
+		body:     stored,
+		etag:     etagOf(body),
 		meta:     objectMeta{contentType: opts.ContentType, user: lowerKeys(opts.Metadata)},
-		checksum: defaultChecksum(data),
+		checksum: defaultChecksum(body),
 	}
-	_, err := s.store(bucketName, obj, writeCondition{}, eventPut, eventSource{})
+	_, err = s.store(bucketName, obj, writeCondition{}, eventPut, eventSource{})
 	return err
 }
 

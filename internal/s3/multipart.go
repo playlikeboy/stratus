@@ -1,7 +1,9 @@
 package s3
 
 import (
+	"encoding/base64"
 	"encoding/xml"
+	"hash"
 	"slices"
 	"strconv"
 	"strings"
@@ -31,7 +33,7 @@ type upload struct {
 // part is an uploaded part; immutable once stored.
 type part struct {
 	number       int
-	data         []byte
+	body         *blob
 	etag         string
 	lastModified time.Time
 	checksum     string // base64, in the upload's algorithm
@@ -196,7 +198,7 @@ func (s *Service) selectParts(bucketName, key, uploadID string, wanted []complet
 		parts = append(parts, p)
 	}
 	for _, p := range parts[:len(parts)-1] {
-		if len(p.data) < minPartSize {
+		if p.body.size < minPartSize {
 			return nil, nil, errEntityTooSmall()
 		}
 	}
@@ -204,41 +206,64 @@ func (s *Service) selectParts(bucketName, key, uploadID string, wanted []complet
 }
 
 // assemble builds the object of a completed upload: the parts' bytes copied
-// once into one slice, the multipart ETag and the upload's checksum.
+// once into one blob, the multipart ETag and the upload's checksum.
 // objectSize is x-amz-mp-object-size, or -1; sent is a whole-object checksum
 // the completion request carried, if any.
-func assemble(u *upload, parts []*part, objectSize int64, sent requestedChecksum) (*object, error) {
+func (s *Service) assemble(u *upload, parts []*part, objectSize int64, sent requestedChecksum) (*object, error) {
 	var total int64
 	sizes := make([]int64, len(parts))
 	etags := make([]string, len(parts))
+	bodies := make([]*blob, len(parts))
 	for i, p := range parts {
-		sizes[i], etags[i] = int64(len(p.data)), p.etag
+		sizes[i], etags[i], bodies[i] = p.body.size, p.etag, p.body
 		total += sizes[i]
 	}
 	if objectSize >= 0 && objectSize != total {
 		return nil, errInvalidRequest("The provided 'x-amz-mp-object-size' header value " +
 			strconv.FormatInt(objectSize, 10) + " does not match what was computed: " + strconv.FormatInt(total, 10))
 	}
-	data := make([]byte, 0, total)
-	for _, p := range parts {
-		data = append(data, p.data...)
+	// The whole-object checksum is computed while the parts are copied.
+	full := wholeObjectAlgorithm(u)
+	var hashes []hash.Hash
+	if full != "" {
+		hashes = append(hashes, newHash(full))
 	}
-	sum, err := uploadChecksum(u, parts, data, sent)
+	body, err := s.blobs.concat(bodies, hashes...)
 	if err != nil {
 		return nil, err
 	}
-	return &object{key: u.key, data: data, etag: multipartETag(etags), meta: u.meta, checksum: sum, partSizes: sizes}, nil
+	fullValue := ""
+	if full != "" {
+		fullValue = base64.StdEncoding.EncodeToString(hashes[0].Sum(nil))
+	}
+	sum, err := uploadChecksum(u, parts, fullValue, sent)
+	if err != nil {
+		return nil, err
+	}
+	return &object{key: u.key, body: body, etag: multipartETag(etags), meta: u.meta, checksum: sum, partSizes: sizes}, nil
 }
 
-// uploadChecksum is the checksum of a completed upload: computed over all
-// the bytes for FULL_OBJECT, over the part checksums for COMPOSITE.
-func uploadChecksum(u *upload, parts []*part, data []byte, sent requestedChecksum) (checksum, error) {
+// wholeObjectAlgorithm is the algorithm of the checksum computed over all the
+// bytes of a completed upload, or empty for a COMPOSITE one.
+func wholeObjectAlgorithm(u *upload) string {
+	switch {
+	case u.algorithm == "":
+		return algoCRC64NVME
+	case u.checksumType == checksumFullObject:
+		return u.algorithm
+	}
+	return ""
+}
+
+// uploadChecksum is the checksum of a completed upload: fullValue, computed
+// over all the bytes, for FULL_OBJECT; over the part checksums for COMPOSITE.
+func uploadChecksum(u *upload, parts []*part, fullValue string, sent requestedChecksum) (checksum, error) {
 	if u.algorithm == "" {
-		return defaultChecksum(data), nil
+		return checksum{algorithm: algoCRC64NVME, value: fullValue, typ: checksumFullObject}, nil
 	}
 	sum := checksum{algorithm: u.algorithm, typ: u.checksumType}
 	if u.checksumType == checksumFullObject {
-		sum.value = computeChecksum(u.algorithm, data)
+		sum.value = fullValue
 	} else {
 		partSums := make([]string, len(parts))
 		for i, p := range parts {

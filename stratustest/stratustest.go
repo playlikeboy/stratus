@@ -78,10 +78,12 @@ func Start(tb testing.TB, opts ...Option) *Server {
 	for _, opt := range opts {
 		opt(tb, &o)
 	}
-	inner, err := server.New(server.Config{Manifest: o.manifest})
+	inner, err := server.New(server.Config{Manifest: o.manifest, DataDir: tb.TempDir()})
 	if err != nil {
 		tb.Fatalf("stratustest: %v", err)
 	}
+	// Registered first, so it runs after the HTTP server has stopped.
+	tb.Cleanup(func() { _ = inner.Close() })
 	ts := httptest.NewUnstartedServer(inner)
 	if o.tls {
 		ts.StartTLS()

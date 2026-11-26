@@ -26,7 +26,11 @@ func (s *Service) putObject(w http.ResponseWriter, r *http.Request, bucketName, 
 	if sum.algorithm == "" {
 		sum = defaultChecksum(p.data)
 	}
-	obj := &object{key: key, data: p.data, etag: etagOf(p.data), meta: metaFromHeaders(r.Header), checksum: sum}
+	body, err := s.blobs.put(p.data)
+	if err != nil {
+		return err
+	}
+	obj := &object{key: key, body: body, etag: etagOf(p.data), meta: metaFromHeaders(r.Header), checksum: sum}
 	stored, err := s.store(bucketName, obj, cond, eventPut, sourceOf(w, r))
 	if err != nil {
 		return err
@@ -106,15 +110,17 @@ func (s *Service) getObject(w http.ResponseWriter, r *http.Request, bucketName, 
 	}
 	writeObjectHeaders(h, o, r.Header.Get("x-amz-checksum-mode") == "ENABLED" && !partial)
 	applyOverrides(h, q)
-	body, status := o.data, http.StatusOK
+	off, n, status := int64(0), o.size(), http.StatusOK
 	if partial {
-		body, status = o.data[rng.start:rng.end+1], http.StatusPartialContent
+		off, n, status = rng.start, rng.end+1-rng.start, http.StatusPartialContent
 		h.Set("Content-Range", rng.contentRange(o.size()))
 	}
-	h.Set("Content-Length", strconv.Itoa(len(body)))
+	h.Set("Content-Length", strconv.FormatInt(n, 10))
 	w.WriteHeader(status)
 	if r.Method != http.MethodHead {
-		_, _ = w.Write(body) // a client that went away is not an error of ours
+		// Past the header nothing can be reported: a client that went away is
+		// not an error of ours, and a read error can only cut the body short.
+		_, _ = o.body.copyTo(w, off, n)
 	}
 	return nil
 }
