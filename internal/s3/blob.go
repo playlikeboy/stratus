@@ -28,9 +28,25 @@ var emptyBlob = &blob{}
 type blobStore struct {
 	dir  string
 	next atomic.Uint64
+	// keep stops the removal of files whose blobs are collected: set when
+	// the files belong to a saved state another store will take over.
+	keep atomic.Bool
 }
 
 func newBlobStore(dir string) *blobStore { return &blobStore{dir: dir} }
+
+// remove is the clean-up of a collected blob: its file goes, unless the
+// store keeps its files.
+func (st *blobStore) remove(path string) {
+	if !st.keep.Load() {
+		_ = os.Remove(path)
+	}
+}
+
+// KeepFiles makes the service leave its object files on disk from now on,
+// even once nothing refers to them: for an emulator that saved its state
+// and is closing, whose files the next one on the directory takes over.
+func (s *Service) KeepFiles() { s.blobs.keep.Store(true) }
 
 // put writes data as a new blob.
 func (st *blobStore) put(data []byte) (*blob, error) {
@@ -83,7 +99,7 @@ func (st *blobStore) write(fill func(io.Writer) (int64, error)) (*blob, error) {
 		return emptyBlob, nil
 	}
 	b := &blob{path: path, size: n}
-	runtime.AddCleanup(b, func(p string) { _ = os.Remove(p) }, path)
+	runtime.AddCleanup(b, st.remove, path)
 	return b, nil
 }
 
@@ -110,7 +126,7 @@ func (st *blobStore) adopt(name string, size int64) (*blob, error) {
 		}
 	}
 	b := &blob{path: path, size: size}
-	runtime.AddCleanup(b, func(p string) { _ = os.Remove(p) }, path)
+	runtime.AddCleanup(b, st.remove, path)
 	return b, nil
 }
 
