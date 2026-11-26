@@ -234,6 +234,7 @@ func (s *Service) attributesLocked(q *queue, now time.Time) map[string]string {
 	visible, inFlight, delayed := 0, 0, 0
 	for _, m := range q.messages {
 		switch {
+		case m.deleted:
 		case !m.visibleAt.After(now):
 			visible++
 		case m.receiveCount == 0:

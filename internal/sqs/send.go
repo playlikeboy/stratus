@@ -60,7 +60,7 @@ func (s *Service) sendLocked(q *queue, in SendInput) (SendOutput, error) {
 		delay = *in.Delay
 	}
 	m.visibleAt = now.Add(delay)
-	q.messages = append(q.messages, m)
+	q.append(m)
 	wake(q)
 	return out, nil
 }

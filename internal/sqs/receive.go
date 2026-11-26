@@ -2,7 +2,6 @@ package sqs
 
 import (
 	"context"
-	"slices"
 	"time"
 
 	"github.com/ODudek/stratus/internal/awsapi"
@@ -44,8 +43,10 @@ func (s *Service) Receive(ctx context.Context, name string, in ReceiveInput) ([]
 		out := s.receiveLocked(q, limit, visibility, now)
 		changed := q.changed
 		pause := deadline.Sub(now)
-		if next := nextVisible(q, now); !next.IsZero() && next.Sub(now) < pause {
-			pause = next.Sub(now)
+		if len(out) == 0 && pause > 0 {
+			if next := nextVisible(q, now); !next.IsZero() && next.Sub(now) < pause {
+				pause = next.Sub(now)
+			}
 		}
 		s.mu.Unlock()
 
@@ -68,37 +69,53 @@ func (s *Service) Receive(ctx context.Context, name string, in ReceiveInput) ([]
 // queue those already received maxReceiveCount times. On a FIFO queue a group
 // with a message that is hidden (in flight or delayed) delivers nothing, so
 // that the order of the group holds; the groups are independent of each other.
+// The walk stops once limit messages are found: the rest of the queue cannot
+// change what is delivered.
 func (s *Service) receiveLocked(q *queue, limit int, visibility time.Duration, now time.Time) []Received {
 	dlq := s.deadLetterLocked(q)
 	var out []Received
-	blocked := map[string]bool{} // FIFO groups that must not deliver now
-	kept := make([]*message, 0, len(q.messages))
-	for _, m := range q.messages {
+	var blocked map[string]bool // FIFO groups that must not deliver now
+	if q.cfg.fifo {
+		blocked = map[string]bool{}
+	}
+	var moved []*message
+	end := len(q.messages) // how far the walk went
+	for i, m := range q.messages {
+		if len(out) == limit {
+			end = i
+			break
+		}
 		switch {
+		case m.deleted:
 		case m.visibleAt.After(now):
 			if q.cfg.fifo {
 				blocked[m.groupID] = true
 			}
-		case len(out) == limit || (q.cfg.fifo && blocked[m.groupID]):
+		case q.cfg.fifo && blocked[m.groupID]:
 		case dlq != nil && m.receiveCount >= q.cfg.redrive.maxReceiveCount:
-			s.moveToDeadLetter(q, dlq, m)
-			continue
+			moved = append(moved, m)
 		default:
-			out = append(out, deliver(m, visibility, now))
+			out = append(out, q.deliver(m, visibility, now))
 		}
-		kept = append(kept, m)
 	}
-	q.messages = kept
+	q.compactPrefix(end)
+	for _, m := range moved { // after the walk: removing one may reslice q.messages
+		s.moveToDeadLetter(q, dlq, m)
+	}
 	return out
 }
 
 // deliver marks m as received now and hides it.
-func deliver(m *message, visibility time.Duration, now time.Time) Received {
+func (q *queue) deliver(m *message, visibility time.Duration, now time.Time) Received {
 	m.receiveCount++
 	if m.firstReceivedAt.IsZero() {
 		m.firstReceivedAt = now
 	}
+	if m.receipt != "" {
+		delete(q.receipts, m.receipt)
+	}
 	m.receipt = awsapi.NewID()
+	q.receipts[m.receipt] = m
 	m.visibleAt = now.Add(visibility)
 	return Received{
 		MessageID:        m.id,
@@ -117,15 +134,18 @@ func deliver(m *message, visibility time.Duration, now time.Time) Received {
 	}
 }
 
-// moveToDeadLetter appends m to dlq, remembering where it came from. A FIFO
-// dead-letter queue numbers it again.
+// moveToDeadLetter moves m from q to the end of dlq, remembering where it came
+// from. A FIFO dead-letter queue numbers it again.
 func (s *Service) moveToDeadLetter(q, dlq *queue, m *message) {
-	m.receipt = ""
-	m.deadLetterSource = s.arn(q.name)
+	q.remove(m)
+	c := *m // m stays in q.messages, marked deleted, until it is dropped from there
+	c.deleted = false
+	c.receipt = ""
+	c.deadLetterSource = s.arn(q.name)
 	if dlq.cfg.fifo {
-		m.sequence = dlq.fifo.nextSequence()
+		c.sequence = dlq.fifo.nextSequence()
 	}
-	dlq.messages = append(dlq.messages, m)
+	dlq.append(&c)
 	wake(dlq)
 }
 
@@ -141,7 +161,7 @@ func (s *Service) deadLetterLocked(q *queue) *queue {
 func nextVisible(q *queue, now time.Time) time.Time {
 	var next time.Time
 	for _, m := range q.messages {
-		if m.visibleAt.After(now) && (next.IsZero() || m.visibleAt.Before(next)) {
+		if !m.deleted && m.visibleAt.After(now) && (next.IsZero() || m.visibleAt.Before(next)) {
 			next = m.visibleAt
 		}
 	}
@@ -169,9 +189,8 @@ func deleteLocked(q *queue, receipt string) error {
 	if receipt == "" {
 		return errReceiptHandleInvalid()
 	}
-	before := len(q.messages)
-	q.messages = slices.DeleteFunc(q.messages, func(m *message) bool { return m.receipt == receipt })
-	if len(q.messages) != before {
+	if m, ok := q.receipts[receipt]; ok {
+		q.remove(m)
 		wake(q)
 	}
 	return nil
@@ -199,19 +218,14 @@ func (s *Service) changeVisibilityLocked(q *queue, receipt string, timeout time.
 		return errInvalidParameter("Value " + seconds(timeout) + " for parameter VisibilityTimeout is invalid. " +
 			"Reason: Must be between 0 and " + seconds(maxVisibility) + ", if provided.")
 	}
+	m, ok := q.receipts[receipt]
 	now := s.clock.Now()
-	for _, m := range q.messages {
-		if m.receipt != receipt {
-			continue
-		}
-		if !m.visibleAt.After(now) {
-			return errMessageNotInflight()
-		}
-		m.visibleAt = now.Add(timeout)
-		wake(q)
-		return nil
+	if !ok || !m.visibleAt.After(now) {
+		return errMessageNotInflight()
 	}
-	return errMessageNotInflight()
+	m.visibleAt = now.Add(timeout)
+	wake(q)
+	return nil
 }
 
 // Purge removes every message of the queue.
@@ -222,6 +236,6 @@ func (s *Service) Purge(name string) error {
 	if err != nil {
 		return err
 	}
-	q.messages = nil
+	q.clearMessages()
 	return nil
 }
