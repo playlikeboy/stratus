@@ -4,7 +4,7 @@
 <h2>Queues <small>SQS · {{len .Queues}}</small></h2>
 {{if .Queues}}<div class="grid">{{range .Queues}}
   <div class="card{{if .InFlight}} amber{{else if .Visible}} green{{end}}">
-    <a class="name" href="/_stratus/ui/sqs/{{.Name}}" title="{{.Name}}">{{.Name}}</a>
+    <a class="name card-link" href="/_stratus/ui/sqs/{{.Name}}" title="{{.Name}}">{{.Name}}</a>
     <div class="big">{{.Visible}}<small>visible</small></div>
     <div class="stats"><span class="{{if .InFlight}}amber{{end}}"><b>{{.InFlight}}</b> in flight</span><span><b>{{.Delayed}}</b> delayed</span></div>
     <div class="foot">{{if .DeadLetter}}<span class="badge">has DLQ</span>{{else}}<span></span>{{end}}
@@ -15,16 +15,16 @@
 <h2>Streams <small>Kinesis · {{len .Streams}}</small></h2>
 {{if .Streams}}<div class="grid">{{range .Streams}}
   <div class="card{{if .Records}} green{{end}}">
-    <a class="name" href="/_stratus/ui/kinesis/{{.Name}}" title="{{.Name}}">{{.Name}}</a>
+    <a class="name card-link" href="/_stratus/ui/kinesis/{{.Name}}" title="{{.Name}}">{{.Name}}</a>
     <div class="big">{{.Records}}<small>records</small></div>
-    <div class="stats"><span><b>{{.Shards}}</b> shards</span><span><b>{{.RetentionHours}}</b> h retention</span></div>
+    <div class="stats"><span><b>{{.Shards}}</b> shards</span><span><b>{{retention .RetentionHours}}</b> retention</span></div>
   </div>{{end}}
 </div>{{else}}<div class="none">No streams.</div>{{end}}
 
 <h2>Buckets <small>S3 · {{len .Buckets}}</small></h2>
 {{if .Buckets}}<div class="grid">{{range .Buckets}}
   <div class="card{{if .Uploads}} amber{{else if .Objects}} green{{end}}">
-    <a class="name" href="/_stratus/ui/s3/{{.Name}}" title="{{.Name}}">{{.Name}}</a>
+    <a class="name card-link" href="/_stratus/ui/s3/{{.Name}}" title="{{.Name}}">{{.Name}}</a>
     <div class="big">{{.Objects}}<small>objects</small></div>
     <div class="stats"><span><b>{{bytes .Bytes}}</b></span><span><b>{{.Versions}}</b> versions</span><span class="{{if .Uploads}}amber{{end}}"><b>{{.Uploads}}</b> uploads</span></div>
     <div class="foot">{{if .Versioning}}<span class="badge">versioning {{.Versioning}}</span>{{else}}<span></span>{{end}}
@@ -35,7 +35,7 @@
 <h2>Tables <small>DynamoDB · {{len .Tables}}</small></h2>
 {{if .Tables}}<div class="grid">{{range .Tables}}
   <div class="card{{if .Items}} green{{end}}">
-    <a class="name" href="/_stratus/ui/dynamodb/{{.Name}}" title="{{.Name}}">{{.Name}}</a>
+    <a class="name card-link" href="/_stratus/ui/dynamodb/{{.Name}}" title="{{.Name}}">{{.Name}}</a>
     <div class="big">{{.Items}}<small>items</small></div>
     <div class="stats"><span><b>{{.Indexes}}</b> indexes</span><span>TTL <b>{{if .TTLAttribute}}{{.TTLAttribute}}{{else}}off{{end}}</b></span></div>
   </div>{{end}}
@@ -44,8 +44,8 @@
 <h2>State machines <small>Step Functions · {{len .Machines}}</small></h2>
 {{if .Machines}}<div class="grid">{{range .Machines}}
   <div class="card{{if .Failed}} red{{else if .Running}} amber{{else if .Succeeded}} green{{end}}">
-    <a class="name" href="/_stratus/ui/states/{{.Name}}" title="{{.Name}}">{{.Name}}</a>
+    <a class="name card-link" href="/_stratus/ui/states/{{.Name}}" title="{{.Name}}">{{.Name}}</a>
     <div class="big">{{.Running}}<small>running</small></div>
-    <div class="stats"><span><b>{{.Succeeded}}</b> succeeded</span><span class="{{if .Failed}}red{{end}}"><b>{{.Failed}}</b> failed</span><span>{{.Type}}</span></div>
+    <div class="stats"><span><b>{{.Succeeded}}</b> succeeded</span><span class="{{if .Failed}}red{{end}}"><b>{{.Failed}}</b> failed</span><span>{{enum .Type}}</span></div>
   </div>{{end}}
 </div>{{else}}<div class="none">No state machines.</div>{{end}}

@@ -126,3 +126,20 @@ input[type="file"].control::file-selector-button { font: 600 13px system-ui, san
 .check input { width: 16px; height: 16px; accent-color: var(--accent); margin: 0; }
 .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
 form.op .row .field, form.op > .field { width: 100%; }
+
+/* A whole card opens its resource: the name's link stretches over the card,
+   and the card's own buttons sit above it. */
+.card { position: relative; cursor: pointer; transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease; }
+.card-link { display: block; color: var(--text); }
+.card-link::after { content: ""; position: absolute; inset: 0; border-radius: inherit; z-index: 0; }
+.card-link:hover { text-decoration: none; }
+.card-link:focus-visible { outline: none; }
+.card .foot form, .card .foot .badge { position: relative; z-index: 1; }
+.card:hover { transform: translateY(-2px);
+  border-top-color: color-mix(in srgb, var(--accent) 45%, var(--line)); border-right-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  border-bottom-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  box-shadow: 0 6px 18px rgba(20, 30, 50, .10), 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent); }
+.card:hover .card-link { color: var(--accent); }
+.card:has(.card-link:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.card:active { transform: translateY(0); }
+@media (prefers-reduced-motion: reduce) { .card, .card:hover, .card:active { transform: none; transition: none; } }
