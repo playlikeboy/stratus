@@ -48,4 +48,4 @@ Both in Docker with 1 CPU and 2 GB, from the same 63-resource manifest:
 | SQS SendMessage, 32 clients | 883 ops/s | **13 058 ops/s** |
 | Kinesis PutRecord, 32 clients | 64 ops/s | **13 580 ops/s** |
 
-The [full comparison](explanation/localstack.md) gives the method and says what is *not* compared.
+The [benchmark](benchmark.md) has every operation at 1 to 128 clients, the method, and what it does *not* compare.

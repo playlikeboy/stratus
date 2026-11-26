@@ -93,6 +93,7 @@ nav:
       - How stratus works: explanation/architecture.md
       - How state is kept: explanation/state.md
       - Compared with LocalStack: explanation/localstack.md
+  - Benchmark: benchmark.md
   - Contributing:
       - contributing/index.md
       - Adding an operation: contributing/adding-an-operation.md
