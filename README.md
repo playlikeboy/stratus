@@ -11,6 +11,8 @@
   <a href="https://github.com/stratus-emulator/stratus/actions/workflows/ci.yml"><img src="https://github.com/stratus-emulator/stratus/actions/workflows/ci.yml/badge.svg" alt="ci"></a>
   <a href="https://hub.docker.com/r/stratusemulator/stratus"><img src="https://img.shields.io/docker/v/stratusemulator/stratus?sort=semver&label=docker" alt="Docker Hub"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue" alt="License: Apache 2.0"></a>
+  <a href="https://github.com/stratus-emulator/stratus/discussions"><img src="https://img.shields.io/github/discussions/stratus-emulator/stratus?label=discussions" alt="Discussions"></a>
+  <a href="https://github.com/sponsors/ODudek"><img src="https://img.shields.io/badge/sponsor-%E2%9D%A4-db61a2" alt="Sponsor"></a>
 </p>
 
 ```sh
@@ -260,9 +262,15 @@ them together.
 
 ## Contributing
 
+Questions and ideas are welcome in [Discussions](https://github.com/stratus-emulator/stratus/discussions).
 Issues and pull requests are welcome: read the
 [contributing guide](https://github.com/stratus-emulator/.github/blob/main/CONTRIBUTING.md) first,
 and report security problems privately as its [security policy](https://github.com/stratus-emulator/.github/blob/main/SECURITY.md) says.
+
+## Supporting the project
+
+stratus is free and open source. If it saves you time, you can
+[sponsor its maintainer](https://github.com/sponsors/ODudek), star the repository, or tell others about it.
 
 ## License
 
