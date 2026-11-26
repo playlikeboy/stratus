@@ -27,29 +27,37 @@ type keysAndAttributes struct {
 }
 
 type batchGetItemInput struct {
+	capacityInput
 	RequestItems map[string]keysAndAttributes
 }
 
 type batchGetItemOutput struct {
-	Responses       map[string][]attr.Item
-	UnprocessedKeys map[string]keysAndAttributes
+	Responses        map[string][]attr.Item
+	UnprocessedKeys  map[string]keysAndAttributes
+	ConsumedCapacity []consumedCapacity `json:",omitempty"`
 }
 
 // batchGetItemOp reads every key; nothing is ever left unprocessed.
 func (s *Service) batchGetItemOp(in batchGetItemInput) (any, error) {
+	capMode, err := in.wantCapacity()
+	if err != nil {
+		return nil, err
+	}
 	if err := checkBatchGetSize(in.RequestItems); err != nil {
 		return nil, err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	ct := newCapacityTracker()
 	out := batchGetItemOutput{Responses: map[string][]attr.Item{}, UnprocessedKeys: map[string]keysAndAttributes{}}
 	for name, req := range in.RequestItems {
-		items, err := s.batchGetTable(name, req)
+		items, err := s.batchGetTable(name, req, ct)
 		if err != nil {
 			return nil, err
 		}
 		out.Responses[name] = items
 	}
+	out.ConsumedCapacity = ct.list(capMode)
 	return out, nil
 }
 
@@ -72,7 +80,7 @@ func checkBatchGetSize(requests map[string]keysAndAttributes) error {
 	return nil
 }
 
-func (s *Service) batchGetTable(name string, req keysAndAttributes) ([]attr.Item, error) {
+func (s *Service) batchGetTable(name string, req keysAndAttributes, ct *capacityTracker) ([]attr.Item, error) {
 	if err := req.check(); err != nil {
 		return nil, err
 	}
@@ -102,7 +110,9 @@ func (s *Service) batchGetTable(name string, req keysAndAttributes) ([]attr.Item
 			return nil, errValidation("Provided list of item keys contains duplicates")
 		}
 		seen[id] = true
-		if item := t.get(key); item != nil {
+		item := t.get(key)
+		ct.addRead(t, nil, attr.ItemSize(item), req.ConsistentRead, 1.0)
+		if item != nil {
 			items = append(items, project(item, paths))
 		}
 	}
@@ -123,16 +133,22 @@ type writeRequest struct {
 }
 
 type batchWriteItemInput struct {
+	capacityInput
 	RequestItems map[string][]writeRequest
 }
 
 type batchWriteItemOutput struct {
 	UnprocessedItems map[string][]writeRequest
+	ConsumedCapacity []consumedCapacity `json:",omitempty"`
 }
 
 // batchWriteItemOp checks every request before applying any, so the batch is
 // applied whole or not at all; nothing is ever left unprocessed.
 func (s *Service) batchWriteItemOp(in batchWriteItemInput) (any, error) {
+	capMode, err := in.wantCapacity()
+	if err != nil {
+		return nil, err
+	}
 	total := 0
 	for _, reqs := range in.RequestItems {
 		total += len(reqs)
@@ -144,6 +160,7 @@ func (s *Service) batchWriteItemOp(in batchWriteItemInput) (any, error) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	ct := newCapacityTracker()
 	var writes []write
 	for name, reqs := range in.RequestItems {
 		t, err := s.table(name)
@@ -162,12 +179,16 @@ func (s *Service) batchWriteItemOp(in batchWriteItemInput) (any, error) {
 			}
 			seen[id] = true
 			writes = append(writes, w)
+			ct.addWrite(t, w, 1.0)
 		}
 	}
 	for _, w := range writes {
 		w.apply()
 	}
-	return batchWriteItemOutput{UnprocessedItems: map[string][]writeRequest{}}, nil
+	return batchWriteItemOutput{
+		UnprocessedItems: map[string][]writeRequest{},
+		ConsumedCapacity: ct.list(capMode),
+	}, nil
 }
 
 func (t *table) prepareBatchWrite(req writeRequest) (write, error) {
