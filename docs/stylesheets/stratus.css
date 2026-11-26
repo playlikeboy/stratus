@@ -1,9 +1,10 @@
-/* The colours of stratus's web panel (internal/server/ui/style.css), so the
-   documentation and the panel look like one product. Keep the two in step. */
+/* The colours, typeface and wordmark of stratus's web panel
+   (internal/server/ui/style.css), on the usual documentation layout.
+   When a colour of the panel changes, change it here too. */
 
 [data-md-color-scheme="default"] {
-  --stratus-bg: #eef1f5;
-  --stratus-card: #ffffff;
+  --stratus-page: #ffffff;   /* the panel's card */
+  --stratus-subtle: #f6f8fb; /* between the panel's background and card */
   --stratus-line: #dde2ea;
   --stratus-text: #17202c;
   --stratus-muted: #677285;
@@ -13,12 +14,11 @@
   --stratus-green: #1e8e57;
   --stratus-notice: #ecebff;
   --stratus-code: #f5f6fa;
-  --stratus-shadow: 0 1px 2px rgba(20, 30, 50, .06), 0 2px 8px rgba(20, 30, 50, .05);
 }
 
 [data-md-color-scheme="slate"] {
-  --stratus-bg: #0f1218;
-  --stratus-card: #181d26;
+  --stratus-page: #0f1218;   /* the panel's background */
+  --stratus-subtle: #141922;
   --stratus-line: #273041;
   --stratus-text: #e6eaf2;
   --stratus-muted: #8e99ad;
@@ -27,17 +27,15 @@
   --stratus-red: #ff7a7a;
   --stratus-green: #4ecb8d;
   --stratus-notice: #25244a;
-  --stratus-code: #11151c;
-  --stratus-shadow: none;
+  --stratus-code: #181d26;   /* the panel's card */
   --md-hue: 220;
 }
 
 [data-md-color-scheme="default"],
 [data-md-color-scheme="slate"] {
-  /* The header is a card, as in the panel, not a coloured bar. */
-  --md-primary-fg-color: var(--stratus-card);
-  --md-primary-fg-color--light: var(--stratus-card);
-  --md-primary-fg-color--dark: var(--stratus-card);
+  --md-primary-fg-color: var(--stratus-page);
+  --md-primary-fg-color--light: var(--stratus-page);
+  --md-primary-fg-color--dark: var(--stratus-page);
   --md-primary-bg-color: var(--stratus-text);
   --md-primary-bg-color--light: var(--stratus-muted);
 
@@ -45,7 +43,7 @@
   --md-accent-fg-color--transparent: var(--stratus-notice);
   --md-typeset-a-color: var(--stratus-accent);
 
-  --md-default-bg-color: var(--stratus-bg);
+  --md-default-bg-color: var(--stratus-page);
   --md-default-fg-color: var(--stratus-text);
   --md-default-fg-color--light: var(--stratus-muted);
   --md-default-fg-color--lighter: var(--stratus-line);
@@ -54,8 +52,8 @@
   --md-code-bg-color: var(--stratus-code);
   --md-code-fg-color: var(--stratus-text);
 
-  --md-footer-bg-color: var(--stratus-card);
-  --md-footer-bg-color--dark: var(--stratus-bg);
+  --md-footer-bg-color: var(--stratus-subtle);
+  --md-footer-bg-color--dark: var(--stratus-subtle);
   --md-footer-fg-color: var(--stratus-text);
   --md-footer-fg-color--light: var(--stratus-muted);
   --md-footer-fg-color--lighter: var(--stratus-muted);
@@ -64,25 +62,21 @@
   --md-code-font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
-/* The header sits on the page, as the panel's does, not on a bar of its own. */
-.md-header,
-.md-tabs {
-  background-color: var(--stratus-bg);
+/* Header: the page's colour with a hairline under it. */
+.md-header {
+  border-bottom: 1px solid var(--stratus-line);
   box-shadow: none;
 }
-.md-tabs {
-  border-bottom: 1px solid var(--stratus-line);
-}
-
-.md-header__title,
-.md-tabs__link--active,
-.md-tabs__link:hover {
+.md-header__title {
   color: var(--stratus-text);
+}
+.md-footer {
+  border-top: 1px solid var(--stratus-line);
 }
 
 /* The panel's wordmark: bold, "us" in the accent colour. */
 .stratus-wordmark {
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   font-weight: 700;
   letter-spacing: -0.01em;
 }
@@ -91,141 +85,58 @@
 }
 .md-header__button.md-logo img,
 .md-header__button.md-logo svg {
-  height: 1.6rem;
+  height: 1.5rem;
 }
 
-/* The content sits on a card, as a resource does in the panel. */
-.md-main__inner .md-content__inner {
-  background: var(--stratus-card);
+/* Search: a field with a border, not a tinted bar. */
+.md-search__form,
+.md-search__form:hover {
+  background: var(--stratus-subtle);
   border: 1px solid var(--stratus-line);
-  border-radius: 12px;
-  box-shadow: var(--stratus-shadow);
-  padding: 0.6rem 1.6rem 1.2rem;
-  margin-top: 1rem;
+  border-radius: 8px;
+}
+.md-search__form:hover {
+  border-color: var(--stratus-muted);
 }
 
-/* The navigation's sections read as the panel's section headings
-   ("Queues SQS · 5"): small, bold, muted capitals. */
+/* Sidebar: section labels in bold, the current page in the accent colour. */
 .md-nav--primary .md-nav__item--section > .md-nav__link,
 .md-nav--primary .md-nav__item--section > label.md-nav__link {
-  color: var(--stratus-muted);
-  font-size: 0.62rem;
+  color: var(--stratus-text);
   font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  margin-top: 1.1rem;
 }
 .md-nav__link--active,
 .md-nav__link:hover {
   color: var(--stratus-accent);
 }
-
-/* Cards, as the panel's resource cards: a monospace name, a big count with
-   its label, a line of details, and a coloured edge on the left. */
-.md-typeset .stratus-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(12.5rem, 1fr));
-  gap: 0.8rem;
-  align-items: start;
-  margin: 1rem 0 1.6rem;
-}
-.md-typeset .stratus-cards > .stratus-card {
-  margin: 0;
-}
-.md-typeset .stratus-card {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  padding: 0.8rem 0.9rem 0.8rem 1rem;
-  background: var(--stratus-card);
-  border: 1px solid var(--stratus-line);
-  border-left: 4px solid var(--stratus-green);
-  border-radius: 10px;
-  box-shadow: var(--stratus-shadow);
-  color: var(--stratus-text);
-  transition: border-color 0.15s, transform 0.15s;
-}
-.md-typeset a.stratus-card:hover,
-.md-typeset div.stratus-card:hover {
-  border-color: var(--stratus-accent);
-  border-left-color: var(--stratus-accent);
-  text-decoration: none;
-}
-.md-typeset a.stratus-card:hover {
-  transform: translateY(-1px);
-}
-.md-typeset .stratus-card .name {
-  font-family: var(--md-code-font-family);
-  font-size: 0.72rem;
-}
-.md-typeset .stratus-card .count {
-  font-size: 1.5rem;
-  font-weight: 700;
-  line-height: 1.2;
-}
-.md-typeset .stratus-card .count small {
-  font-size: 0.68rem;
-  font-weight: 400;
-  color: var(--stratus-muted);
-  margin-left: 0.3rem;
-}
-.md-typeset .stratus-card .meta {
-  font-size: 0.64rem;
-  color: var(--stratus-muted);
-}
-/* A card written in Markdown wraps its name and count in a paragraph. */
-.md-typeset .stratus-card > p {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  margin: 0;
-}
-.md-typeset .stratus-card ul {
-  margin: 0.2rem 0 0;
-  padding: 0;
-  list-style: none;
-  font-size: 0.68rem;
-}
-.md-typeset .stratus-card ul li {
-  margin: 0.15rem 0 0;
-}
-
-/* The header already carries the wordmark: the navigation needs no title. */
 @media screen and (min-width: 76.25em) {
   .md-nav--primary > .md-nav__title {
     display: none;
   }
 }
 
-/* Headings as bold as the panel's titles. */
+/* Headings in the text colour, bold. */
 .md-typeset h1 {
   color: var(--stratus-text);
   font-weight: 700;
+  letter-spacing: -0.01em;
 }
 .md-typeset h2,
 .md-typeset h3 {
-  font-weight: 700;
+  font-weight: 650;
 }
 
+/* Tables and code blocks with a hairline, as in the panel. */
 .md-typeset table:not([class]) {
   border: 1px solid var(--stratus-line);
   border-radius: 8px;
 }
-
 .md-typeset table:not([class]) th {
-  background: var(--stratus-code);
-  color: var(--stratus-muted);
+  background: var(--stratus-subtle);
 }
-
-/* The search box as the panel's inputs: a card with a border. */
-.md-search__form {
-  background: var(--stratus-card);
+.md-typeset pre > code {
   border: 1px solid var(--stratus-line);
   border-radius: 8px;
-}
-.md-search__form:hover {
-  background: var(--stratus-card);
-  border-color: var(--stratus-accent);
 }
 
 /* Admonitions in the panel's status colours. */
@@ -245,7 +156,6 @@
 .md-typeset .info > .admonition-title::before {
   background-color: var(--stratus-accent);
 }
-
 .md-typeset .admonition.warning,
 .md-typeset details.warning {
   border-color: var(--stratus-amber);
@@ -253,7 +163,6 @@
 .md-typeset .warning > .admonition-title::before {
   background-color: var(--stratus-amber);
 }
-
 .md-typeset .admonition.danger,
 .md-typeset details.danger {
   border-color: var(--stratus-red);
@@ -261,7 +170,6 @@
 .md-typeset .danger > .admonition-title::before {
   background-color: var(--stratus-red);
 }
-
 .md-typeset .admonition.tip,
 .md-typeset details.tip,
 .md-typeset .admonition.success,

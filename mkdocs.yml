@@ -25,8 +25,8 @@ theme:
       toggle:
         icon: material/weather-sunny
         name: Light mode
-  # One navigation on the left, as the panel has one list of resources: its
-  # sections are the panel's section headings, and a page's contents sit in it.
+  # The usual documentation layout: sections on the left, the page's
+  # contents on the right.
   features:
     - navigation.sections
     - navigation.top
@@ -36,7 +36,6 @@ theme:
     - search.highlight
     - content.code.copy
     - content.tabs.link
-    - toc.integrate
     - toc.follow
 
 extra_css:
