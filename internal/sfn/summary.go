@@ -55,18 +55,27 @@ type ExecutionView struct {
 	Error, Cause  string
 }
 
-// MachineDetail returns a state machine's definition and its executions,
-// newest first, up to max.
-func (s *Service) MachineDetail(name string, max int) (definition string, executions []ExecutionView, err error) {
+// MachineInfo is a state machine's definition and settings.
+type MachineInfo struct {
+	ARN, Type, RoleARN string
+	Created, Updated   time.Time
+	Definition         string
+}
+
+// MachineDetail describes a state machine and returns its executions with
+// the status status (empty: any) whose name contains nameContains, newest
+// first, up to max, and how many match in all.
+func (s *Service) MachineDetail(name, status, nameContains string, max int) (MachineInfo, []ExecutionView, int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	m, ok := s.machines[name]
 	if !ok {
-		return "", nil, errMachineNotFound(s.StateMachineARN(name))
+		return MachineInfo{}, nil, 0, errMachineNotFound(s.StateMachineARN(name))
 	}
+	info := MachineInfo{ARN: m.arn, Type: m.typ, RoleARN: m.roleARN, Created: m.created, Updated: m.updated, Definition: m.definition}
 	var all []*execution
 	for _, e := range s.executions {
-		if e.m.name == name {
+		if e.m.name == name && (status == "" || e.status == status) && strings.Contains(e.name, nameContains) {
 			all = append(all, e)
 		}
 	}
@@ -76,11 +85,12 @@ func (s *Service) MachineDetail(name string, max int) (definition string, execut
 		}
 		return cmp.Compare(b.seq, a.seq)
 	})
+	var executions []ExecutionView
 	for _, e := range all[:min(len(all), max)] {
 		executions = append(executions, ExecutionView{
 			Name: e.name, Status: e.status, Started: e.started, Stopped: e.stopped,
 			Input: e.rawInput, Output: e.output, Error: e.errName, Cause: e.cause,
 		})
 	}
-	return m.definition, executions, nil
+	return info, executions, len(all), nil
 }

@@ -161,7 +161,7 @@ func TestUIQueueDetailPeeksWithoutReceiving(t *testing.T) {
 		t.Fatalf("Send: %v", err)
 	}
 	code, page := get(t, ts.URL+"/_stratus/ui/sqs/jobs")
-	if code != http.StatusOK || !strings.Contains(page, "{&#34;order&#34;: 42}") || !strings.Contains(page, "visible") {
+	if code != http.StatusOK || !strings.Contains(page, "&#34;order&#34;: 42") || !strings.Contains(page, "visible") {
 		t.Fatalf("queue detail = %d, without the message", code)
 	}
 	if q := srv.queueSummaries(); q[0].Visible != 1 || q[0].InFlight != 0 {
@@ -178,7 +178,7 @@ func TestUIDetailsOfEveryKind(t *testing.T) {
 		"/_stratus/ui/kinesis/events":                       "No records.",
 		"/_stratus/ui/dynamodb/locks":                       "The table is empty.",
 		"/_stratus/ui/s3/files":                             "dir/report.txt",
-		"/_stratus/ui/s3/files?prefix=other/":               "No objects under this prefix.",
+		"/_stratus/ui/s3/files?prefix=other/":               "No objects match.",
 		"/_stratus/ui/s3/files/object?key=dir%2Freport.txt": "hello from s3",
 	} {
 		code, page := get(t, ts.URL+path)
@@ -225,15 +225,6 @@ func TestUIDownloadIsAnAttachment(t *testing.T) {
 	}
 	if code, _ := get(t, ts.URL+"/_stratus/ui/s3/files/download?key=missing"); code != http.StatusNotFound {
 		t.Errorf("downloading a missing key = %d, want 404", code)
-	}
-}
-
-func TestDisplayText(t *testing.T) {
-	if got := displayText([]byte("plain\ttext\n")); got != "plain\ttext\n" {
-		t.Errorf("text = %q", got)
-	}
-	if got := displayText([]byte{0, 1, 2}); got != "base64: AAEC" {
-		t.Errorf("binary = %q", got)
 	}
 }
 

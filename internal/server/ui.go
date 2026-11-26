@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ODudek/stratus/internal/dynamodb"
@@ -21,11 +22,13 @@ import (
 var uiFiles embed.FS
 
 var uiTemplates = template.Must(template.New("").Funcs(template.FuncMap{
-	"bytes": formatBytes,
-	"len64": func(b []byte) int64 { return int64(len(b)) },
-	"time":  func(t time.Time) string { return t.Local().Format("2006-01-02 15:04:05") },
-	"text":  displayText,
-	"deref": func(s *string) string { return *s },
+	"bytes":     formatBytes,
+	"time":      func(t time.Time) string { return t.Local().Format("2006-01-02 15:04:05") },
+	"deref":     func(s *string) string { return *s },
+	"decode":    func(s string) decodedRecord { return decodePayload([]byte(s), nil) },
+	"hasPrefix": strings.HasPrefix,
+	"hasSuffix": strings.HasSuffix,
+	"statuses":  func() []string { return []string{"RUNNING", "SUCCEEDED", "FAILED", "TIMED_OUT", "ABORTED"} },
 }).ParseFS(uiFiles, "ui/page.html", "ui/resources.html", "ui/detail.html"))
 
 func (s *Server) registerUI() {

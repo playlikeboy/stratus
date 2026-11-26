@@ -53,9 +53,51 @@ func viewOf(o *object) ObjectView {
 		ContentType: o.meta.contentType, VersionID: o.versionID}
 }
 
+// BucketInfo is a bucket's configuration.
+type BucketInfo struct {
+	Created       time.Time
+	Region        string
+	Versioning    string // empty: never enabled
+	Lifecycle     []LifecycleRule
+	Notifications []NotificationView
+}
+
+// NotificationView is one queue a bucket tells about object events.
+type NotificationView struct {
+	QueueARN       string
+	Events         []string
+	Prefix, Suffix string
+}
+
+// Bucket describes one bucket.
+func (s *Service) Bucket(name string) (BucketInfo, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	b, err := s.bucketOf(name)
+	if err != nil {
+		return BucketInfo{}, err
+	}
+	info := BucketInfo{Created: b.createdAt, Region: b.region, Versioning: b.versioning, Lifecycle: slices.Clone(b.lifecycle)}
+	for _, q := range b.notifications.Queues {
+		n := NotificationView{QueueARN: q.Queue, Events: slices.Clone(q.Events)}
+		if q.Filter != nil {
+			for _, r := range q.Filter.Rules {
+				switch strings.ToLower(r.Name) {
+				case "prefix":
+					n.Prefix = r.Value
+				case "suffix":
+					n.Suffix = r.Value
+				}
+			}
+		}
+		info.Notifications = append(info.Notifications, n)
+	}
+	return info, nil
+}
+
 // ListObjectViews returns up to max current objects whose key starts with
-// prefix, in key order, and whether more match.
-func (s *Service) ListObjectViews(bucketName, prefix string, max int) ([]ObjectView, bool, error) {
+// prefix and contains contains, in key order, and whether more match.
+func (s *Service) ListObjectViews(bucketName, prefix, contains string, max int) ([]ObjectView, bool, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	b, err := s.bucketOf(bucketName)
@@ -64,7 +106,7 @@ func (s *Service) ListObjectViews(bucketName, prefix string, max int) ([]ObjectV
 	}
 	keys := make([]string, 0, len(b.objects))
 	for k := range b.objects {
-		if strings.HasPrefix(k, prefix) && b.current(k) != nil {
+		if strings.HasPrefix(k, prefix) && strings.Contains(k, contains) && b.current(k) != nil {
 			keys = append(keys, k)
 		}
 	}

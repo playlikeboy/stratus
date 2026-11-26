@@ -32,6 +32,41 @@ func (s *Service) Streams() []StreamSummary {
 	return out
 }
 
+// StreamInfo is a stream's configuration and shards.
+type StreamInfo struct {
+	ARN            string
+	Mode           string
+	Created        time.Time
+	RetentionHours int
+	Shards         []ShardInfo
+}
+
+// ShardInfo is one shard: its hash key range and the records it holds.
+type ShardInfo struct {
+	ID                             string
+	StartingHashKey, EndingHashKey string
+	Records                        int
+}
+
+// Stream describes one stream.
+func (s *Service) Stream(name string) (StreamInfo, error) {
+	s.mu.RLock()
+	st, ok := s.streams[name]
+	s.mu.RUnlock()
+	if !ok {
+		return StreamInfo{}, errStreamNotFound(name, s.identity.Account)
+	}
+	st.mu.RLock()
+	defer st.mu.RUnlock()
+	info := StreamInfo{ARN: st.arn, Mode: st.mode, Created: st.created, RetentionHours: st.retentionHours}
+	for _, sh := range st.shards {
+		info.Shards = append(info.Shards, ShardInfo{
+			ID: sh.id, StartingHashKey: sh.start.String(), EndingHashKey: sh.end.String(), Records: len(sh.records),
+		})
+	}
+	return info, nil
+}
+
 // RecordView is a record as a look at the stream shows it.
 type RecordView struct {
 	Shard        string

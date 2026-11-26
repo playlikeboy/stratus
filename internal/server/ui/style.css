@@ -70,3 +70,34 @@ tr:last-child td { border-bottom: 0; }
 th { font-size: 12px; font-weight: 600; color: var(--muted); }
 td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
 td.key { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; white-space: normal; overflow-wrap: anywhere; }
+
+/* Detail pages: settings, search, operations */
+.info { margin: 14px 0; display: grid; gap: 10px; }
+.info dl { margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px 16px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+.info dl > div { min-width: 0; }
+.info dt { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.info dd { margin: 2px 0 0; font-size: 13px; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.info details summary, .ops summary { cursor: pointer; font-weight: 600; font-size: 14px; }
+code { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code); padding: 1px 5px; border-radius: 4px; }
+select, textarea, input[type="file"] { font: inherit; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--card); color: var(--text); max-width: 100%; }
+textarea { width: 100%; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; resize: vertical; }
+.ops { margin: 4px 0 14px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; }
+.ops-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; margin-top: 10px; }
+form.op { display: grid; gap: 8px; align-content: start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; min-width: 0; }
+form.op h3 { margin: 0; font-size: 14px; }
+form.op p { margin: 0; color: var(--muted); font-size: 12px; }
+form.op .row { display: flex; flex-wrap: wrap; gap: 8px; }
+form.op .row input { flex: 1 1 140px; width: auto; }
+form.op input:not([type="file"]) { width: 100%; }
+form.op button { justify-self: start; }
+.entry .meta .spacer { flex: 1; }
+.entry .meta form { margin-left: auto; }
+.decoded { display: grid; gap: 4px; }
+.decoded + .decoded { border-top: 1px dashed var(--line); padding-top: 6px; }
+.io { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px; }
+.io small { color: var(--muted); }
+td.actions { display: flex; gap: 10px; align-items: center; }
+td.small, .key.small { font-size: 11px; color: var(--muted); }
+a.button { font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); }
