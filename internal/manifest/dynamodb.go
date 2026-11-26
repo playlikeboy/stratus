@@ -1,13 +1,17 @@
 package manifest
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/stratus-emulator/stratus/internal/dynamodb"
 )
 
 type DynamoDB struct {
-	Tables []Table `yaml:"tables"`
+	// Persistence keeps the data of every table across a restart of an emulator
+	// given -state-dir; unset, it follows the manifest's.
+	Persistence *bool   `yaml:"persistence"`
+	Tables      []Table `yaml:"tables"`
 }
 
 type Table struct {
@@ -18,6 +22,9 @@ type Table struct {
 	TTLAttribute  string  `yaml:"ttlAttribute"`
 	LocalIndexes  []Index `yaml:"localIndexes"`
 	GlobalIndexes []Index `yaml:"globalIndexes"`
+	// Persistence keeps the data of this table across a restart of an emulator
+	// given -state-dir; unset, it follows the service's.
+	Persistence *bool `yaml:"persistence"`
 }
 
 // Key is a key attribute; Type is S (the default), N or B.
@@ -55,7 +62,10 @@ func (d DynamoDB) validate() error {
 
 func (d DynamoDB) apply(tables *dynamodb.Service) error {
 	for _, t := range d.Tables {
-		if err := tables.CreateTable(t.spec()); err != nil {
+		if err := tables.EnsureTable(t.spec()); err != nil {
+			if errors.Is(err, dynamodb.ErrSpecMismatch) {
+				return conflict("dynamodb table", t.Name, err)
+			}
 			return fmt.Errorf("dynamodb table %q: %w", t.Name, err)
 		}
 	}

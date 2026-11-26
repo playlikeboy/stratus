@@ -44,6 +44,8 @@ func run(args []string) error {
 	healthcheck := flags.Bool("healthcheck", false, "check that a running stratus on -listen is ready, then exit")
 	ttlInterval := flags.Duration("ttl-interval", 0, "how often to delete expired DynamoDB items in the background, for example 1m; 0 only on POST /_stratus/expire-ttl")
 	dataDir := flags.String("data-dir", "", "existing directory to keep S3 object bytes in, under a directory removed on exit; when empty the user's cache directory, else /var/tmp (never /tmp, often a tmpfs held in memory)")
+	stateDir := flags.String("state-dir", "", "directory to keep the data of the manifest's resources in across restarts, S3 object bytes included; which resources, the manifest's persistence says (all, when it says nothing); empty keeps nothing")
+	stateInterval := flags.Duration("state-interval", server.DefaultStateInterval, "how often to save the state to -state-dir, besides on exit")
 	var https tlsOptions
 	tlsListen := flags.String("tls-listen", "", "address to also serve HTTPS on, for example :4567")
 	flags.StringVar(&https.certFile, "tls-cert", "", "certificate file for -tls-listen; a self-signed one is generated when empty")
@@ -73,10 +75,12 @@ func run(args []string) error {
 		resources = loaded
 	}
 	emulator, err := server.New(server.Config{
-		Identity:    awsapi.Identity{Account: *account, Region: *region},
-		Manifest:    resources,
-		DataDir:     *dataDir,
-		TTLInterval: *ttlInterval,
+		Identity:      awsapi.Identity{Account: *account, Region: *region},
+		Manifest:      resources,
+		DataDir:       *dataDir,
+		TTLInterval:   *ttlInterval,
+		StateDir:      *stateDir,
+		StateInterval: *stateInterval,
 	})
 	if err != nil {
 		return fmt.Errorf("creating the manifest's resources: %w", err)
@@ -107,7 +111,7 @@ func run(args []string) error {
 		go func() { served <- httpServer.ServeTLS(secure, "", "") }()
 		slog.Info("stratus serves HTTPS", "listen", secure.Addr().String())
 	}
-	slog.Info("stratus is ready", "version", version, "listen", listener.Addr().String(), "region", *region, "manifest", *manifestPath)
+	slog.Info("stratus is ready", "version", version, "listen", listener.Addr().String(), "region", *region, "manifest", *manifestPath, "stateDir", *stateDir)
 
 	select {
 	case err := <-served:

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -36,6 +37,11 @@ type Targets struct {
 
 // Manifest is the resources to create; the zero value creates nothing.
 type Manifest struct {
+	// Persistence keeps the data of every resource across a restart of an
+	// emulator given -state-dir; unset, it does whenever -state-dir is given.
+	// A service, and a resource, can say otherwise for itself.
+	Persistence *bool `yaml:"persistence"`
+
 	SQS      SQS      `yaml:"sqs"`
 	Kinesis  Kinesis  `yaml:"kinesis"`
 	S3       S3       `yaml:"s3"`
@@ -45,10 +51,16 @@ type Manifest struct {
 }
 
 type S3 struct {
-	Buckets []Bucket `yaml:"buckets"`
+	// Persistence keeps the data of every bucket across a restart of an emulator
+	// given -state-dir; unset, it follows the manifest's.
+	Persistence *bool    `yaml:"persistence"`
+	Buckets     []Bucket `yaml:"buckets"`
 }
 
 type Bucket struct {
+	// Persistence keeps the data of this bucket across a restart of an emulator
+	// given -state-dir; unset, it follows the service's.
+	Persistence   *bool                `yaml:"persistence"`
 	Name          string               `yaml:"name"`
 	Versioning    bool                 `yaml:"versioning"`
 	Lifecycle     []BucketExpiration   `yaml:"lifecycle"`
@@ -71,6 +83,9 @@ type BucketNotification struct {
 }
 
 type StepFunctions struct {
+	// Persistence keeps the data of every state machine and its executions across a restart of an emulator
+	// given -state-dir; unset, it follows the manifest's.
+	Persistence   *bool          `yaml:"persistence"`
 	StateMachines []StateMachine `yaml:"stateMachines"`
 }
 
@@ -84,20 +99,32 @@ type StateMachine struct {
 	Substitutions map[string]string `yaml:"substitutions"`
 	// Type is STANDARD (the default) or EXPRESS.
 	Type string `yaml:"type"`
+	// Persistence keeps the data of this state machine and its executions across a restart of an emulator
+	// given -state-dir; unset, it follows the service's.
+	Persistence *bool `yaml:"persistence"`
 }
 
 type Kinesis struct {
-	Streams []Stream `yaml:"streams"`
+	// Persistence keeps the data of every stream across a restart of an emulator
+	// given -state-dir; unset, it follows the manifest's.
+	Persistence *bool    `yaml:"persistence"`
+	Streams     []Stream `yaml:"streams"`
 }
 
 type Stream struct {
 	Name string `yaml:"name"`
 	// Shards defaults to 1.
 	Shards int `yaml:"shards"`
+	// Persistence keeps the data of this stream across a restart of an emulator
+	// given -state-dir; unset, it follows the service's.
+	Persistence *bool `yaml:"persistence"`
 }
 
 type SQS struct {
-	Queues []Queue `yaml:"queues"`
+	// Persistence keeps the data of every queue across a restart of an emulator
+	// given -state-dir; unset, it follows the manifest's.
+	Persistence *bool   `yaml:"persistence"`
+	Queues      []Queue `yaml:"queues"`
 }
 
 type Queue struct {
@@ -108,6 +135,9 @@ type Queue struct {
 	DeadLetter               *DeadLetter `yaml:"deadLetter"`
 	// ContentBasedDeduplication applies to a FIFO queue: one whose name ends in ".fifo".
 	ContentBasedDeduplication bool `yaml:"contentBasedDeduplication"`
+	// Persistence keeps the data of this queue across a restart of an emulator
+	// given -state-dir; unset, it follows the service's.
+	Persistence *bool `yaml:"persistence"`
 }
 
 type DeadLetter struct {
@@ -245,12 +275,19 @@ func (m Manifest) Apply(t Targets) error {
 		return err
 	}
 	for _, st := range m.Kinesis.Streams {
-		if err := t.Kinesis.CreateStream(st.Name, max(st.Shards, 1)); err != nil {
+		shards := max(st.Shards, 1)
+		if have, ok := t.Kinesis.ShardCount(st.Name); ok {
+			if have != shards {
+				return conflict("kinesis stream", st.Name, fmt.Errorf("it has %d shards, the manifest declares %d", have, shards))
+			}
+			continue
+		}
+		if err := t.Kinesis.CreateStream(st.Name, shards); err != nil {
 			return fmt.Errorf("kinesis stream %q: %w", st.Name, err)
 		}
 	}
 	for _, b := range m.S3.Buckets {
-		if err := t.S3.CreateBucket(b.Name, b.options(t.Identity)); err != nil {
+		if err := t.S3.EnsureBucket(b.Name, b.options(t.Identity)); err != nil {
 			return fmt.Errorf("s3 bucket %q: %w", b.Name, err)
 		}
 	}
@@ -266,37 +303,66 @@ func (m Manifest) Apply(t Targets) error {
 		if sm.Type != "" {
 			opts = append(opts, sfn.WithType(sm.Type))
 		}
-		if err := t.SFN.CreateStateMachine(sm.Name, definition, opts...); err != nil {
+		if err := t.SFN.EnsureStateMachine(sm.Name, definition, opts...); err != nil {
+			if errors.Is(err, sfn.ErrTypeMismatch) {
+				return conflict("state machine", sm.Name, err)
+			}
 			return fmt.Errorf("state machine %q: %w", sm.Name, err)
 		}
 	}
 	return nil
 }
 
-// applyQueues creates the queues. They may be declared in any order:
+// conflict is the error for a resource that exists, kept from an earlier run,
+// and differs from the manifest in a way that cannot be changed in place.
+func conflict(kind, name string, err error) error {
+	return fmt.Errorf("%s %q: %w; it was kept in the state of -state-dir: delete that state, or the resource, to create it as the manifest declares", kind, name, err)
+}
+
+// applyQueues creates the queues, or gives those that exist, as after a
+// restore, the manifest's attributes. They may be declared in any order:
 // dead-letter links are set once every queue exists.
 func (m Manifest) applyQueues(identity awsapi.Identity, queues *sqs.Service) error {
 	for _, q := range m.SQS.Queues {
-		if err := queues.CreateQueue(q.Name, q.attributes()); err != nil {
+		var err error
+		if queues.Exists(q.Name) {
+			err = queues.SetAttributes(q.Name, q.attributesOverExisting())
+		} else {
+			err = queues.CreateQueue(q.Name, q.attributes())
+		}
+		if err != nil {
 			return fmt.Errorf("sqs queue %q: %w", q.Name, err)
 		}
 	}
 	for _, q := range m.SQS.Queues {
-		if q.DeadLetter == nil {
-			continue
+		policy := ""
+		if q.DeadLetter != nil {
+			encoded, err := json.Marshal(map[string]any{
+				"deadLetterTargetArn": identity.ARN("sqs", q.DeadLetter.Queue),
+				"maxReceiveCount":     q.DeadLetter.MaxReceiveCount,
+			})
+			if err != nil {
+				return fmt.Errorf("sqs queue %q: %w", q.Name, err)
+			}
+			policy = string(encoded)
 		}
-		policy, err := json.Marshal(map[string]any{
-			"deadLetterTargetArn": identity.ARN("sqs", q.DeadLetter.Queue),
-			"maxReceiveCount":     q.DeadLetter.MaxReceiveCount,
-		})
-		if err != nil {
-			return fmt.Errorf("sqs queue %q: %w", q.Name, err)
-		}
-		if err := queues.SetAttributes(q.Name, map[string]string{"RedrivePolicy": string(policy)}); err != nil {
+		if err := queues.SetAttributes(q.Name, map[string]string{"RedrivePolicy": policy}); err != nil {
 			return fmt.Errorf("sqs queue %q: %w", q.Name, err)
 		}
 	}
 	return nil
+}
+
+// attributesOverExisting is every attribute the manifest controls, those it
+// leaves out at SQS's defaults: a setting removed from the manifest is
+// removed from a queue kept from an earlier run too.
+func (q Queue) attributesOverExisting() map[string]string {
+	attrs := map[string]string{"VisibilityTimeout": "30", "DelaySeconds": "0", "ReceiveMessageWaitTimeSeconds": "0"}
+	maps.Copy(attrs, q.attributes())
+	if strings.HasSuffix(q.Name, ".fifo") {
+		attrs["ContentBasedDeduplication"] = strconv.FormatBool(q.ContentBasedDeduplication)
+	}
+	return attrs
 }
 
 func (q Queue) attributes() map[string]string {

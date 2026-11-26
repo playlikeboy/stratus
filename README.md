@@ -59,8 +59,9 @@ S3 keeps each object's bytes in a file of a directory of its own, created at sta
 `-data-dir` and removed on exit, so large objects do not hold memory; a file goes once no version
 refers to it. Without `-data-dir` that directory is in the user's cache directory, else `/var/tmp`,
 never `/tmp`, which is a tmpfs held in memory on many systems. The Docker image uses `/data`;
-mount a volume there to keep the bytes off the container's writable layer. Nothing survives a
-restart: buckets and object metadata are in memory.
+mount a volume there to keep the bytes off the container's writable layer. Without `-state-dir`
+nothing survives a restart: buckets and object metadata are in memory. With it, data survives
+restarts: [Keeping data across restarts](#keeping-data-across-restarts).
 
 ## Run
 
@@ -102,6 +103,8 @@ aws --endpoint-url http://localhost:4566 sqs list-queues
 | `-healthcheck` | | check that a running stratus on `-listen` is ready, then exit |
 | `-ttl-interval` | `0` (off) | how often to delete expired DynamoDB items in the background, for example `1m` |
 | `-data-dir` | user cache dir, else `/var/tmp` | existing directory under which S3 object bytes are kept, in a directory removed on exit |
+| `-state-dir` | none | directory to keep data in across restarts, S3 object bytes included; the manifest's `persistence` says which resources |
+| `-state-interval` | `10s` | how often to save the state to `-state-dir`, besides on exit |
 | `-tls-listen` | none | address to also serve HTTPS on, for example `:4567` |
 | `-tls-cert`, `-tls-key` | none | certificate and key for HTTPS; a self-signed pair is generated when empty |
 | `-tls-hosts` | `localhost,127.0.0.1,::1` | names and addresses a generated certificate is valid for |
@@ -169,6 +172,49 @@ stepFunctions:
 Resources may be listed in any order. An unknown key, a duplicate name, or a reference to a queue
 that is not declared is an error at start. `examples/manifest.yaml` is a complete one.
 
+## Keeping data across restarts
+
+By default stratus starts from the manifest every time, which suits tests. A local stack that lives
+for days next to a database with a volume needs its queues, tables, streams and objects to survive a
+restart too. Give stratus a state directory, a volume in Docker:
+
+```sh
+docker run -p 4566:4566 -v stratus-state:/data stratusemulator/stratus:0.2.0 \
+  -manifest /work/manifest.yaml -state-dir /data/state
+```
+
+stratus saves the data every `-state-interval` (10 s) and on exit (`docker stop` sends SIGTERM),
+one JSON file per service, each replaced at once so that a crash leaves either the last save or the
+one before. S3 object bytes stay in files under the directory. At start it brings the data back,
+then applies the manifest over it:
+
+- a resource the manifest adds is created; one it no longer lists stays;
+- a setting that can change in place is taken from the manifest: queue attributes, dead-letter
+  links, bucket versioning, lifecycle and notifications, a table's TTL attribute, a state machine's
+  definition;
+- a change that cannot be made in place, such as a table's keys or indexes, a stream's shard count
+  or a state machine's type, stops the start and says which resource to delete;
+- Kinesis sequence numbers go on where they stopped, so a consumer's checkpoint stays valid;
+- a running Step Functions execution resumes in the state it was in, and a `Wait` ends when it
+  would have. A Task that was waiting is called again.
+
+The manifest says which resources keep their data, at three levels; the nearest one decides:
+
+```yaml
+persistence: true            # every resource (the default, when -state-dir is given)
+sqs:
+  persistence: false         # every queue...
+  queues:
+    - name: orders
+      persistence: true      # ...but this one
+    - name: scratch          # not kept: empty after every restart
+```
+
+A resource created through the API, not declared in the manifest, follows its service. Without
+`-state-dir` the setting is ignored, so the same manifest serves tests and a long-lived stack. The
+state of a resource the manifest stops keeping is dropped at the next start. `POST /_stratus/save`
+saves at once; `POST /_stratus/reset` empties every resource, and the next save writes that.
+
 ## Control endpoints
 
 | Endpoint | Meaning |
@@ -176,6 +222,7 @@ that is not declared is an error at start. `examples/manifest.yaml` is a complet
 | `GET /_stratus/ready` | `200` once the manifest's resources exist, with the list of services |
 | `POST /_stratus/reset` | drop all state and create the manifest's resources again |
 | `POST /_stratus/expire-ttl` | delete the DynamoDB items past their TTL now; answers `{"deleted": n}` |
+| `POST /_stratus/save` | save the state to `-state-dir` now; does nothing without one |
 | `GET /_localstack/health` | the same answer in LocalStack's shape, for existing health checks |
 | `GET /_stratus/ui` | the web panel, below |
 
@@ -251,24 +298,27 @@ endpoint, err := ctr.BaseEndpoint(ctx) // BaseEndpoint for any AWS SDK client
 Coming from the LocalStack module, its [README](testcontainers/README.md#coming-from-the-localstack-module)
 maps one to the other.
 
-## Compared with LocalStack
+## Compared with LocalStack and moto
 
-Both in Docker with 1 CPU and 2 GB each, started from the same manifest, driven by the AWS SDK for
-Go. Method, every operation and its caveats: [`bench/README.md`](bench/README.md); rerun with
-`bench/run.sh`.
+All three in Docker with 1 CPU and 2 GB each, started from the same manifest, driven by the AWS SDK
+for Go, in one run. Method, every operation and its caveats: [`bench/README.md`](bench/README.md);
+rerun with `bench/run.sh`.
 
-| | LocalStack (`community-archive`) | stratus |
-|---|---|---|
-| Ready with 63 resources | 13.7 s | **0.24 s** |
-| Memory once ready | 636 MiB | **3 MiB** |
-| Image | 1.81 GB | **12.9 MB** |
-| DynamoDB PutItem, 32 clients | 194 ops/s, p99 373 ms | **11 106 ops/s, p99 30 ms** |
-| S3 GetObject 4 KiB, 32 clients | 711 ops/s, p99 101 ms | **11 301 ops/s, p99 8 ms** |
-| S3 PutObject 256 KiB, 32 clients | 329 ops/s, p99 201 ms | **663 ops/s, p99 125 ms** |
-| SQS SendMessage, 32 clients | 883 ops/s, p99 98 ms | **13 058 ops/s, p99 6 ms** |
-| Kinesis PutRecord, 32 clients | 64 ops/s, p99 2.2 s | **13 580 ops/s, p99 5 ms** |
+| | LocalStack (`community-archive`) | moto (`5.2.6`, server) | stratus |
+|---|---|---|---|
+| Ready with 63 resources | 10.30 s | 6.05 s | **0.13 s** |
+| Memory once ready | 646 MiB | 90 MiB | **4 MiB** |
+| Image | 1.81 GB | 578 MB | **16.1 MB** |
+| DynamoDB PutItem, 32 clients | 235 ops/s, p99 1 093 ms | 679 ops/s¹, p99 72 ms | **19 222 ops/s, p99 17 ms** |
+| S3 GetObject 4 KiB, 32 clients | 1 300 ops/s, p99 51 ms | 582 ops/s¹, p99 82 ms | **13 490 ops/s, p99 17 ms** |
+| S3 PutObject 256 KiB, 32 clients | 539 ops/s, **p99 106 ms** | 310 ops/s, p99 229 ms | **832 ops/s**, p99 125 ms |
+| SQS SendMessage, 32 clients | 1 176 ops/s, p99 92 ms | 78 ops/s, p99 483 ms | **23 268 ops/s, p99 2.9 ms** |
+| Kinesis PutRecord, 32 clients | 119 ops/s, p99 812 ms | 580 ops/s, p99 87 ms | **17 823 ops/s, p99 6.2 ms** |
 
-This compares speed, not behaviour: see each service's "Not emulated" column above.
+¹ Some of moto's calls failed (dropped connections) and are not counted.
+
+This compares speed, not behaviour: see each service's "Not emulated" column above. moto mocks AWS
+for unit tests; its server mode is a side use.
 
 ## Develop
 

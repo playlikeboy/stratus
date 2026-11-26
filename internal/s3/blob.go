@@ -87,6 +87,56 @@ func (st *blobStore) write(fill func(io.Writer) (int64, error)) (*blob, error) {
 	return b, nil
 }
 
+// adopt returns the blob of a file a store in the same directory wrote before,
+// as a snapshot names it, and keeps the store's names after it. The file is
+// removed, as any blob's, once nothing refers to the blob.
+func (st *blobStore) adopt(name string, size int64) (*blob, error) {
+	if name == "" {
+		return emptyBlob, nil
+	}
+	if filepath.Base(name) != name {
+		return nil, fmt.Errorf("blob name %q is not a file of the store", name)
+	}
+	path := filepath.Join(st.dir, name)
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	if info.Size() != size {
+		return nil, fmt.Errorf("blob %s holds %d bytes, the snapshot says %d", name, info.Size(), size)
+	}
+	if n, err := strconv.ParseUint(name, 36, 64); err == nil {
+		for cur := st.next.Load(); n > cur && !st.next.CompareAndSwap(cur, n); cur = st.next.Load() {
+		}
+	}
+	b := &blob{path: path, size: size}
+	runtime.AddCleanup(b, func(p string) { _ = os.Remove(p) }, path)
+	return b, nil
+}
+
+// sweep removes the files of the directory that keep does not name: those
+// written after the snapshot a store was restored from.
+func (st *blobStore) sweep(keep map[string]bool) error {
+	entries, err := os.ReadDir(st.dir)
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		if !e.IsDir() && !keep[e.Name()] {
+			_ = os.Remove(filepath.Join(st.dir, e.Name()))
+		}
+	}
+	return nil
+}
+
+// name is the file name of b in its store, empty for the empty blob.
+func (b *blob) name() string {
+	if b == nil || b.path == "" {
+		return ""
+	}
+	return filepath.Base(b.path)
+}
+
 // copyTo writes n bytes of b from offset off to w.
 func (b *blob) copyTo(w io.Writer, off, n int64) (int64, error) {
 	if n == 0 {

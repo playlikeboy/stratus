@@ -34,6 +34,13 @@ type Config struct {
 	// background, as DynamoDB does. Zero: never by itself, only through
 	// ExpireTTL or POST /_stratus/expire-ttl, so tests stay deterministic.
 	TTLInterval time.Duration
+	// StateDir is the directory the data of the resources the manifest keeps
+	// is saved in, and brought back from at start; S3 object bytes are kept
+	// under it too, instead of DataDir. Empty: nothing is kept.
+	StateDir string
+	// StateInterval is how often the state is saved, besides on Close.
+	// Zero: DefaultStateInterval.
+	StateInterval time.Duration
 }
 
 // Server is one emulator. It is ready as soon as New returns: the manifest's
@@ -47,7 +54,10 @@ type Server struct {
 	targets  manifest.Targets
 	gateway  *gateway.Gateway
 	control  *http.ServeMux
-	dataDir  string // this emulator's own directory of object bytes, removed by Close
+	dataDir  string // this emulator's own directory of object bytes, removed by Close unless it is under stateDir
+
+	stateDir    string // empty: nothing is kept
+	persistence manifest.Persistence
 
 	closeOnce sync.Once
 	closed    chan struct{} // closed by Close; stops the background TTL expiry
@@ -63,13 +73,9 @@ func New(cfg Config) (*Server, error) {
 	if cfg.Clock == nil {
 		cfg.Clock = clock.System{}
 	}
-	if cfg.DataDir == "" {
-		cfg.DataDir = DefaultDataDir()
-	}
-	// A directory of its own: nothing left by an earlier run is in the way.
-	dataDir, err := os.MkdirTemp(cfg.DataDir, "stratus-")
+	dataDir, err := objectDir(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("creating the data directory: %w", err)
+		return nil, err
 	}
 	queues := sqs.New(cfg.Identity, cfg.Clock)
 	streams := kinesis.New(cfg.Identity, cfg.Clock)
@@ -86,22 +92,64 @@ func New(cfg Config) (*Server, error) {
 		control:  http.NewServeMux(),
 		dataDir:  dataDir,
 		closed:   make(chan struct{}),
+
+		stateDir:    cfg.StateDir,
+		persistence: cfg.Manifest.PersistenceFor(cfg.StateDir != ""),
 	}
 	s.control.HandleFunc("GET /_stratus/ready", s.handleReady)
 	s.control.HandleFunc("POST /_stratus/reset", s.handleReset)
+	s.control.HandleFunc("POST /_stratus/save", s.handleSave)
 	s.control.HandleFunc("POST /_stratus/expire-ttl", s.handleExpireTTL)
 	s.registerUI()
 	// Kept so that health checks written for LocalStack keep working.
 	s.control.HandleFunc("GET /_localstack/health", s.handleLocalStackHealth)
 
+	if s.stateDir != "" {
+		if err := s.loadState(); err != nil {
+			s.closeWithoutSaving()
+			return nil, err
+		}
+	}
 	if err := s.applyManifest(); err != nil {
-		_ = s.Close()
+		s.closeWithoutSaving()
 		return nil, err
 	}
 	if cfg.TTLInterval > 0 {
 		go s.expireTTLEvery(cfg.TTLInterval)
 	}
+	if s.stateDir != "" {
+		if err := s.Save(); err != nil {
+			s.closeWithoutSaving()
+			return nil, err
+		}
+		interval := cfg.StateInterval
+		if interval <= 0 {
+			interval = DefaultStateInterval
+		}
+		go s.saveEvery(interval)
+	}
 	return s, nil
+}
+
+// objectDir is the directory S3 keeps object bytes in: under the state
+// directory when there is one, else a directory of its own under DataDir, so
+// that nothing left by an earlier run is in the way.
+func objectDir(cfg Config) (string, error) {
+	if cfg.StateDir != "" {
+		dir := filepath.Join(cfg.StateDir, "s3")
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return "", fmt.Errorf("creating the state directory: %w", err)
+		}
+		return dir, nil
+	}
+	if cfg.DataDir == "" {
+		cfg.DataDir = DefaultDataDir()
+	}
+	dir, err := os.MkdirTemp(cfg.DataDir, "stratus-")
+	if err != nil {
+		return "", fmt.Errorf("creating the data directory: %w", err)
+	}
+	return dir, nil
 }
 
 // expireTTLEvery deletes the expired DynamoDB items every interval, as
@@ -140,11 +188,28 @@ func DefaultDataDir() string {
 	return os.TempDir()
 }
 
-// Close stops the background TTL expiry and removes the object bytes the
-// emulator kept on disk. The emulator must not serve requests after it.
+// Close stops the background work and, with a state directory, saves the
+// state a last time; without one it removes the object bytes the emulator
+// kept on disk. The emulator must not serve requests after it.
 func (s *Server) Close() error {
-	s.closeOnce.Do(func() { close(s.closed) })
+	first := false
+	s.closeOnce.Do(func() { close(s.closed); first = true })
+	if s.stateDir != "" {
+		if !first {
+			return nil
+		}
+		return s.Save()
+	}
 	return os.RemoveAll(s.dataDir)
+}
+
+// closeWithoutSaving stops an emulator that failed to start, leaving its
+// state directory as it found it.
+func (s *Server) closeWithoutSaving() {
+	s.closeOnce.Do(func() { close(s.closed) })
+	if s.stateDir == "" {
+		_ = os.RemoveAll(s.dataDir)
+	}
 }
 
 // Reset returns the emulator to the state it started in: everything is
@@ -179,6 +244,15 @@ func (s *Server) handleReady(w http.ResponseWriter, _ *http.Request) {
 
 func (s *Server) handleReset(w http.ResponseWriter, _ *http.Request) {
 	if err := s.Reset(); err != nil {
+		awsapi.WriteJSON(w, "application/json", http.StatusInternalServerError,
+			map[string]string{"error": err.Error()})
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleSave(w http.ResponseWriter, _ *http.Request) {
+	if err := s.Save(); err != nil {
 		awsapi.WriteJSON(w, "application/json", http.StatusInternalServerError,
 			map[string]string{"error": err.Error()})
 		return

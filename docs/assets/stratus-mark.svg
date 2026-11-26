@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="stratus">
+  <!-- Two flat cloud bands (stratus); their puffs turn them into an S. For light backgrounds. -->
+  <g fill="#8a8aee"><circle cx="46" cy="44" r="15"/><rect x="24" y="44" width="74" height="18" rx="9"/></g>
+  <g fill="#4646c8"><rect x="30" y="66" width="74" height="18" rx="9"/><circle cx="82" cy="84" r="15"/></g>
+</svg>
