@@ -1,0 +1,100 @@
+site_name: stratus
+site_description: A fast local emulator of SQS, S3, DynamoDB, Kinesis and Step Functions, for development and tests.
+site_url: https://stratus-emulator.github.io/stratus/
+repo_url: https://github.com/stratus-emulator/stratus
+repo_name: stratus-emulator/stratus
+edit_uri: edit/main/docs/
+copyright: Apache License 2.0
+
+theme:
+  name: material
+  # The header carries the web panel's wordmark (overrides/partials/header.html).
+  custom_dir: overrides
+  logo: assets/stratus-mark.svg
+  favicon: assets/favicon.svg
+  # The web panel's typeface: the system's own.
+  font: false
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/weather-night
+        name: Dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/weather-sunny
+        name: Light mode
+  # The usual documentation layout: sections on the left, the page's
+  # contents on the right.
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - navigation.indexes
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.tabs.link
+    - toc.follow
+
+extra_css:
+  - stylesheets/stratus.css
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/stratus-emulator/stratus
+    - icon: fontawesome/brands/docker
+      link: https://hub.docker.com/r/stratusemulator/stratus
+
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - Guides:
+      - guides/index.md
+      - Docker and Compose: guides/docker.md
+      - Go tests: guides/go-tests.md
+      - Testcontainers: guides/testcontainers.md
+      - Keeping data across restarts: guides/persistence.md
+      - Moving from LocalStack: guides/from-localstack.md
+      - Web panel: guides/web-panel.md
+  - Reference:
+      - reference/index.md
+      - Manifest: reference/manifest.md
+      - Command line: reference/cli.md
+      - Control endpoints: reference/endpoints.md
+      - Services and operations: reference/services.md
+      - Go packages: reference/go.md
+  - Explanation:
+      - explanation/index.md
+      - How stratus works: explanation/architecture.md
+      - How state is kept: explanation/state.md
+      - Compared with LocalStack: explanation/localstack.md
+  - Benchmark: benchmark.md
+  - Contributing:
+      - contributing/index.md
+      - Adding an operation: contributing/adding-an-operation.md
+      - Releases: contributing/releases.md

@@ -44,6 +44,8 @@ func run(args []string) error {
 	healthcheck := flags.Bool("healthcheck", false, "check that a running stratus on -listen is ready, then exit")
 	ttlInterval := flags.Duration("ttl-interval", 0, "how often to delete expired DynamoDB items in the background, for example 1m; 0 only on POST /_stratus/expire-ttl")
 	dataDir := flags.String("data-dir", "", "existing directory to keep S3 object bytes in, under a directory removed on exit; when empty the user's cache directory, else /var/tmp (never /tmp, often a tmpfs held in memory)")
+	stateDir := flags.String("state-dir", "", "directory to keep the data of the manifest's resources in across restarts, S3 object bytes included; which resources, the manifest's persistence says (all, when it says nothing); empty keeps nothing")
+	stateInterval := flags.Duration("state-interval", server.DefaultStateInterval, "how often to save the state to -state-dir, besides on exit")
 	var https tlsOptions
 	tlsListen := flags.String("tls-listen", "", "address to also serve HTTPS on, for example :4567")
 	flags.StringVar(&https.certFile, "tls-cert", "", "certificate file for -tls-listen; a self-signed one is generated when empty")
@@ -73,10 +75,12 @@ func run(args []string) error {
 		resources = loaded
 	}
 	emulator, err := server.New(server.Config{
-		Identity:    awsapi.Identity{Account: *account, Region: *region},
-		Manifest:    resources,
-		DataDir:     *dataDir,
-		TTLInterval: *ttlInterval,
+		Identity:      awsapi.Identity{Account: *account, Region: *region},
+		Manifest:      resources,
+		DataDir:       *dataDir,
+		TTLInterval:   *ttlInterval,
+		StateDir:      *stateDir,
+		StateInterval: *stateInterval,
 	})
 	if err != nil {
 		return fmt.Errorf("creating the manifest's resources: %w", err)
@@ -90,37 +94,59 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
-	// No read or write timeout: a long-polling receive is a slow request by design.
-	httpServer := &http.Server{Handler: emulator, ReadHeaderTimeout: 10 * time.Second}
-	served := make(chan error, 2)
-	go func() { served <- httpServer.Serve(listener) }()
+	// HTTPS listens before anything is served, so a client that saw
+	// /_stratus/ready over HTTP finds HTTPS listening too.
+	var secure net.Listener
+	var tlsConfig *tls.Config
 	if *tlsListen != "" {
 		cert, err := https.certificate()
 		if err != nil {
 			return err
 		}
-		secure, err := (&net.ListenConfig{}).Listen(ctx, "tcp", *tlsListen)
-		if err != nil {
+		if secure, err = (&net.ListenConfig{}).Listen(ctx, "tcp", *tlsListen); err != nil {
 			return err
 		}
-		httpServer.TLSConfig = &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12}
-		go func() { served <- httpServer.ServeTLS(secure, "", "") }()
+		tlsConfig = &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12}
 		slog.Info("stratus serves HTTPS", "listen", secure.Addr().String())
 	}
-	slog.Info("stratus is ready", "version", version, "listen", listener.Addr().String(), "region", *region, "manifest", *manifestPath)
+	slog.Info("stratus is ready", "version", version, "listen", listener.Addr().String(), "region", *region, "manifest", *manifestPath, "stateDir", *stateDir)
+	return serve(ctx, emulator, listener, secure, tlsConfig)
+}
+
+// serve answers on listener, and over HTTPS on secure when it is not nil,
+// until ctx is done. Each listener has an http.Server of its own: one server
+// serving both sets HTTP/2 up once, for whichever starts first, and when that
+// was the plain one, HTTPS announced HTTP/2 it then could not serve.
+func serve(ctx context.Context, handler http.Handler, listener, secure net.Listener, tlsConfig *tls.Config) error {
+	// No read or write timeout: a long-polling receive is a slow request by design.
+	plain := &http.Server{Handler: handler, ReadHeaderTimeout: 10 * time.Second}
+	servers := []*http.Server{plain}
+	served := make(chan error, 2)
+	go func() { served <- plain.Serve(listener) }()
+	if secure != nil {
+		s := &http.Server{Handler: handler, ReadHeaderTimeout: 10 * time.Second, TLSConfig: tlsConfig}
+		servers = append(servers, s)
+		go func() { served <- s.ServeTLS(secure, "", "") }()
+	}
 
 	select {
 	case err := <-served:
+		for _, s := range servers {
+			_ = s.Close()
+		}
 		return err
 	case <-ctx.Done():
 	}
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
-	if err := httpServer.Shutdown(shutdownCtx); err != nil {
-		// Long-polling receivers are still open: cut them.
-		return httpServer.Close()
+	var errs []error
+	for _, s := range servers {
+		if err := s.Shutdown(shutdownCtx); err != nil {
+			// Long-polling receivers are still open: cut them.
+			errs = append(errs, s.Close())
+		}
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 // checkReady is the container health check: the image has no shell or curl.

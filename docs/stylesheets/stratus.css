@@ -1,0 +1,182 @@
+/* The colours, typeface and wordmark of stratus's web panel
+   (internal/server/ui/style.css), on the usual documentation layout.
+   When a colour of the panel changes, change it here too. */
+
+[data-md-color-scheme="default"] {
+  --stratus-page: #ffffff;   /* the panel's card */
+  --stratus-subtle: #f6f8fb; /* between the panel's background and card */
+  --stratus-line: #dde2ea;
+  --stratus-text: #17202c;
+  --stratus-muted: #677285;
+  --stratus-accent: #5b5bd6;
+  --stratus-amber: #c47f00;
+  --stratus-red: #d03b3b;
+  --stratus-green: #1e8e57;
+  --stratus-notice: #ecebff;
+  --stratus-code: #f5f6fa;
+}
+
+[data-md-color-scheme="slate"] {
+  --stratus-page: #0f1218;   /* the panel's background */
+  --stratus-subtle: #141922;
+  --stratus-line: #273041;
+  --stratus-text: #e6eaf2;
+  --stratus-muted: #8e99ad;
+  --stratus-accent: #9d9dff;
+  --stratus-amber: #f2b546;
+  --stratus-red: #ff7a7a;
+  --stratus-green: #4ecb8d;
+  --stratus-notice: #25244a;
+  --stratus-code: #181d26;   /* the panel's card */
+  --md-hue: 220;
+}
+
+[data-md-color-scheme="default"],
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: var(--stratus-page);
+  --md-primary-fg-color--light: var(--stratus-page);
+  --md-primary-fg-color--dark: var(--stratus-page);
+  --md-primary-bg-color: var(--stratus-text);
+  --md-primary-bg-color--light: var(--stratus-muted);
+
+  --md-accent-fg-color: var(--stratus-accent);
+  --md-accent-fg-color--transparent: var(--stratus-notice);
+  --md-typeset-a-color: var(--stratus-accent);
+
+  --md-default-bg-color: var(--stratus-page);
+  --md-default-fg-color: var(--stratus-text);
+  --md-default-fg-color--light: var(--stratus-muted);
+  --md-default-fg-color--lighter: var(--stratus-line);
+  --md-default-fg-color--lightest: var(--stratus-line);
+
+  --md-code-bg-color: var(--stratus-code);
+  --md-code-fg-color: var(--stratus-text);
+
+  --md-footer-bg-color: var(--stratus-subtle);
+  --md-footer-bg-color--dark: var(--stratus-subtle);
+  --md-footer-fg-color: var(--stratus-text);
+  --md-footer-fg-color--light: var(--stratus-muted);
+  --md-footer-fg-color--lighter: var(--stratus-muted);
+
+  --md-text-font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --md-code-font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* Header: the page's colour with a hairline under it. */
+.md-header {
+  border-bottom: 1px solid var(--stratus-line);
+  box-shadow: none;
+}
+.md-header__title {
+  color: var(--stratus-text);
+}
+.md-footer {
+  border-top: 1px solid var(--stratus-line);
+}
+
+/* The panel's wordmark: bold, "us" in the accent colour. */
+.stratus-wordmark {
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.stratus-wordmark span {
+  color: var(--stratus-accent);
+}
+.md-header__button.md-logo img,
+.md-header__button.md-logo svg {
+  height: 1.5rem;
+}
+
+/* Search: a field with a border, not a tinted bar. */
+.md-search__form,
+.md-search__form:hover {
+  background: var(--stratus-subtle);
+  border: 1px solid var(--stratus-line);
+  border-radius: 8px;
+}
+.md-search__form:hover {
+  border-color: var(--stratus-muted);
+}
+
+/* Sidebar: section labels in bold, the current page in the accent colour. */
+.md-nav--primary .md-nav__item--section > .md-nav__link,
+.md-nav--primary .md-nav__item--section > label.md-nav__link {
+  color: var(--stratus-text);
+  font-weight: 700;
+}
+.md-nav__link--active,
+.md-nav__link:hover {
+  color: var(--stratus-accent);
+}
+@media screen and (min-width: 76.25em) {
+  .md-nav--primary > .md-nav__title {
+    display: none;
+  }
+}
+
+/* Headings in the text colour, bold. */
+.md-typeset h1 {
+  color: var(--stratus-text);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.md-typeset h2,
+.md-typeset h3 {
+  font-weight: 650;
+}
+
+/* Tables and code blocks with a hairline, as in the panel. */
+.md-typeset table:not([class]) {
+  border: 1px solid var(--stratus-line);
+  border-radius: 8px;
+}
+.md-typeset table:not([class]) th {
+  background: var(--stratus-subtle);
+}
+.md-typeset pre > code {
+  border: 1px solid var(--stratus-line);
+  border-radius: 8px;
+}
+
+/* Admonitions in the panel's status colours. */
+.md-typeset .admonition.note,
+.md-typeset details.note,
+.md-typeset .admonition.info,
+.md-typeset details.info {
+  border-color: var(--stratus-accent);
+}
+.md-typeset .note > .admonition-title,
+.md-typeset .note > summary,
+.md-typeset .info > .admonition-title,
+.md-typeset .info > summary {
+  background: var(--stratus-notice);
+}
+.md-typeset .note > .admonition-title::before,
+.md-typeset .info > .admonition-title::before {
+  background-color: var(--stratus-accent);
+}
+.md-typeset .admonition.warning,
+.md-typeset details.warning {
+  border-color: var(--stratus-amber);
+}
+.md-typeset .warning > .admonition-title::before {
+  background-color: var(--stratus-amber);
+}
+.md-typeset .admonition.danger,
+.md-typeset details.danger {
+  border-color: var(--stratus-red);
+}
+.md-typeset .danger > .admonition-title::before {
+  background-color: var(--stratus-red);
+}
+.md-typeset .admonition.tip,
+.md-typeset details.tip,
+.md-typeset .admonition.success,
+.md-typeset details.success {
+  border-color: var(--stratus-green);
+}
+.md-typeset .tip > .admonition-title::before,
+.md-typeset .success > .admonition-title::before {
+  background-color: var(--stratus-green);
+}

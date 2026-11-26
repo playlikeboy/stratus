@@ -56,6 +56,34 @@ func TestObjectBytesAreKeptInAFile(t *testing.T) {
 	}
 }
 
+// A service that keeps its files (an emulator with -state-dir, closing) never
+// removes them once its objects are collected: another service on the same
+// directory may have taken them over.
+func TestFilesKeptByAClosedServiceSurviveItsObjects(t *testing.T) {
+	s, dir := newDiskService(t)
+	if err := s.PutObject("files", "a.txt", []byte("hello"), ObjectOptions{}); err != nil {
+		t.Fatalf("PutObject: %v", err)
+	}
+	data, err := s.Snapshot(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.KeepFiles()
+	next := New(awsapi.Identity{Account: awsapi.DefaultAccount, Region: awsapi.DefaultRegion}, clock.System{}, dir)
+	if err := next.Restore(data, nil); err != nil {
+		t.Fatalf("Restore: %v", err)
+	}
+	s = nil // the first service and its objects are gone
+	for range 5 {
+		runtime.GC()
+		time.Sleep(10 * time.Millisecond)
+	}
+	body, err := next.buckets["files"].current("a.txt").body.bytes()
+	if err != nil || string(body) != "hello" {
+		t.Fatalf("a.txt after the first service was collected: %q, %v", body, err)
+	}
+}
+
 func TestFileIsRemovedOnceNothingRefersToTheObject(t *testing.T) {
 	s, dir := newDiskService(t)
 	if err := s.PutObject("files", "a.txt", []byte("hello"), ObjectOptions{}); err != nil {

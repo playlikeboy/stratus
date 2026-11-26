@@ -9,6 +9,7 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"crypto/rand"
 	"encoding/csv"
@@ -202,8 +203,10 @@ func measure(ctx context.Context, o op, conc int, d time.Duration, container str
 		mu   sync.Mutex
 		lat  []time.Duration
 		errs int
-		next atomic.Int64
-		wg   sync.WaitGroup
+		// firstErr is printed to stderr, so that an error count has a cause.
+		firstErr error
+		next     atomic.Int64
+		wg       sync.WaitGroup
 	)
 	began := time.Now()
 	stop := began.Add(d)
@@ -213,10 +216,12 @@ func measure(ctx context.Context, o op, conc int, d time.Duration, container str
 			defer wg.Done()
 			var mine []time.Duration
 			failed := 0
+			var first error
 			for time.Now().Before(stop) {
 				t := time.Now()
 				if err := o.call(ctx, next.Add(1)); err != nil {
 					failed++
+					first = cmp.Or(first, err)
 					continue
 				}
 				mine = append(mine, time.Since(t))
@@ -224,11 +229,15 @@ func measure(ctx context.Context, o op, conc int, d time.Duration, container str
 			mu.Lock()
 			lat = append(lat, mine...)
 			errs += failed
+			firstErr = cmp.Or(firstErr, first)
 			mu.Unlock()
 		}()
 	}
 	wg.Wait()
 	elapsed := time.Since(began).Seconds()
+	if firstErr != nil {
+		fmt.Fprintf(os.Stderr, "%s, %d clients: %d errors, first: %v\n", o.name, conc, errs, firstErr)
+	}
 	sort.Slice(lat, func(a, b int) bool { return lat[a] < lat[b] })
 	pct := func(q float64) float64 {
 		if len(lat) == 0 {
