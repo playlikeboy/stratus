@@ -198,18 +198,23 @@ func (s *Server) Close() error {
 		if !first {
 			return nil
 		}
+		// The saved state names the object files: they outlive this
+		// emulator's objects, for the next emulator on the directory.
+		s.targets.S3.KeepFiles()
 		return s.Save()
 	}
 	return os.RemoveAll(s.dataDir)
 }
 
 // closeWithoutSaving stops an emulator that failed to start, leaving its
-// state directory as it found it.
+// state directory, object files included, as it found it.
 func (s *Server) closeWithoutSaving() {
 	s.closeOnce.Do(func() { close(s.closed) })
-	if s.stateDir == "" {
-		_ = os.RemoveAll(s.dataDir)
+	if s.stateDir != "" {
+		s.targets.S3.KeepFiles()
+		return
 	}
+	_ = os.RemoveAll(s.dataDir)
 }
 
 // Reset returns the emulator to the state it started in: everything is

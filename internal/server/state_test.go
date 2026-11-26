@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -67,8 +68,15 @@ func TestAServerWithAStateDirectoryKeepsItsDataAcrossARestart(t *testing.T) {
 	if err := first.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
+	first = nil
 
 	second := newStateServer(t, dir, stateManifest)
+	// The first emulator's objects are collected while the second runs: their
+	// clean-up must not remove the files the second took over.
+	for range 5 {
+		runtime.GC()
+		time.Sleep(10 * time.Millisecond)
+	}
 	defer func() { _ = second.Close() }()
 	if got := receiveBodies(t, second, "jobs"); len(got) != 1 || got[0] != "hello jobs" {
 		t.Errorf("jobs after a restart: %v, want its message", got)
