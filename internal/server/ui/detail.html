@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{.Name}} · stratus</title>
+<link rel="icon" href="/_stratus/ui/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/_stratus/ui/style.css">
 <script src="/_stratus/ui/htmx.min.js"></script>
 <script src="/_stratus/ui/dropdown.js" defer></script>
@@ -17,7 +18,7 @@ function editing() {
 </head>
 <body>
 <header>
-  <h1><a href="/_stratus/ui">strat<span>us</span></a></h1>
+  <h1><a href="/_stratus/ui"><svg class="logo" viewBox="16 22 96 84" aria-hidden="true"><g class="logo-a"><circle cx="46" cy="44" r="15"/><rect x="24" y="44" width="74" height="18" rx="9"/></g><g class="logo-b"><rect x="30" y="66" width="74" height="18" rx="9"/><circle cx="82" cy="84" r="15"/></g></svg><b class="wordmark">strat<span>us</span></b></a></h1>
   <span class="pill">{{.Region}}</span>
   <span class="pill">account {{.Account}}</span>
 </header>

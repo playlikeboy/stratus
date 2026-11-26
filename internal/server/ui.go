@@ -18,7 +18,7 @@ import (
 // The web UI: one page that htmx refreshes with server-rendered fragments.
 // It needs no build step and no network: htmx is embedded.
 
-//go:embed ui/fields.html ui/dropdown.js ui/page.html ui/resources.html ui/detail.html ui/style.css ui/htmx-2.0.4.min.js
+//go:embed ui/favicon.svg ui/fields.html ui/dropdown.js ui/page.html ui/resources.html ui/detail.html ui/style.css ui/htmx-2.0.4.min.js
 var uiFiles embed.FS
 
 var uiTemplates = template.Must(template.New("").Funcs(template.FuncMap{
@@ -58,6 +58,7 @@ func (s *Server) registerUI() {
 	s.control.HandleFunc("GET /_stratus/ui", s.handleUIPage)
 	s.control.HandleFunc("GET /_stratus/ui/htmx.min.js", serveUIFile("ui/htmx-2.0.4.min.js", "text/javascript; charset=utf-8"))
 	s.control.HandleFunc("GET /_stratus/ui/dropdown.js", serveUIFile("ui/dropdown.js", "text/javascript; charset=utf-8"))
+	s.control.HandleFunc("GET /_stratus/ui/favicon.svg", serveUIFile("ui/favicon.svg", "image/svg+xml"))
 	s.control.HandleFunc("GET /_stratus/ui/style.css", serveUIFile("ui/style.css", "text/css; charset=utf-8"))
 	s.control.HandleFunc("GET /_stratus/ui/resources", s.handleUIResources)
 	s.control.HandleFunc("GET /_stratus/ui/create-form", s.handleUICreateForm)
