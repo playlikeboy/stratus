@@ -22,11 +22,11 @@ type shardView struct {
 	SequenceNumberRange sequenceNumberRange
 }
 
-func viewOf(sh *shard) shardView {
+func viewOf(st *stream, sh *shard) shardView {
 	return shardView{
 		ShardId:             sh.id,
 		HashKeyRange:        hashKeyRange{StartingHashKey: sh.start.String(), EndingHashKey: sh.end.String()},
-		SequenceNumberRange: sequenceNumberRange{StartingSequenceNumber: formatSeq(0)},
+		SequenceNumberRange: sequenceNumberRange{StartingSequenceNumber: formatSeq(st.firstSeq)},
 	}
 }
 
@@ -47,7 +47,7 @@ func pageShards(st *stream, exclusiveStart string, limit int) ([]shardView, bool
 	end := min(from+limit, len(st.shards))
 	page := make([]shardView, 0, end-from)
 	for _, sh := range st.shards[from:end] {
-		page = append(page, viewOf(sh))
+		page = append(page, viewOf(st, sh))
 	}
 	return page, end < len(st.shards), nil
 }

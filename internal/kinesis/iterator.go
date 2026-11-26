@@ -72,6 +72,11 @@ func (s *Service) shardIterator(st *stream, id string, spec iteratorSpec) (strin
 		return "", errNotFound("Shard " + id + " in stream " + st.name + " under account " + s.identity.Account + " does not exist.")
 	}
 	sh := st.shards[idx]
+	if (spec.kind == "AT_SEQUENCE_NUMBER" || spec.kind == "AFTER_SEQUENCE_NUMBER") &&
+		(spec.seq < st.firstSeq || spec.seq > st.lastSeq) {
+		return "", errInvalidArgument("StartingSequenceNumber " + formatSeq(spec.seq) + " used in GetShardIterator on shard " +
+			sh.id + " in stream " + st.name + " under account " + s.identity.Account + " is invalid.")
+	}
 	var next uint64
 	switch spec.kind {
 	case "TRIM_HORIZON":

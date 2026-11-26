@@ -56,8 +56,13 @@ type stream struct {
 	retentionHours int
 	tags           map[string]string
 	shards         []*shard
-	lastSeq        uint64 // the stream-wide sequence counter
-	deleted        bool   // set when the stream leaves the table; see Service.live
+	// firstSeq is the counter at creation, the time the stream was created in
+	// nanoseconds: every stream of a name, in this emulator or one before a
+	// restart, issues sequence numbers above those of the ones before it, so a
+	// checkpoint of an earlier one is told apart and refused.
+	firstSeq uint64
+	lastSeq  uint64 // the stream-wide sequence counter, the last number issued
+	deleted  bool   // set when the stream leaves the table; see Service.live
 }
 
 // New returns an empty service of the given account and region.
@@ -109,14 +114,18 @@ func (s *Service) createStream(name string, shards int, mode string) error {
 		return errLimitExceeded("The emulator holds at most 100000 shards in total.")
 	}
 	s.nextGen++
+	now := s.clock.Now()
+	first := uint64(max(now.UnixNano(), 0))
 	s.streams[name] = &stream{
 		name:           name,
 		arn:            s.identity.ARN("kinesis", "stream/"+name),
 		gen:            s.nextGen,
-		created:        s.clock.Now().Truncate(time.Millisecond),
+		created:        now.Truncate(time.Millisecond),
 		mode:           mode,
 		retentionHours: defaultRetentionHours,
 		shards:         newShards(shards),
+		firstSeq:       first,
+		lastSeq:        first,
 	}
 	return nil
 }

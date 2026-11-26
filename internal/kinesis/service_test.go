@@ -152,6 +152,55 @@ func TestSequenceNumbersIncreaseAndCompareAsNumbers(t *testing.T) {
 	}
 }
 
+// A sequence number a consumer checkpointed in an earlier stream of the same
+// name — one deleted and created again, or one of an emulator since restarted —
+// is refused, as Kinesis refuses one that is not of the shard. Accepted, it
+// would start the new stream at that number and skip every record below it.
+func TestASequenceNumberOfAnEarlierStreamIsRefused(t *testing.T) {
+	const shard = "shardId-000000000000"
+	before, clk := newTestService(t, 1)
+	var checkpoint uint64
+	for range 500 {
+		checkpoint = mustPut(t, before, "k", "old").seq
+	}
+
+	clk.Advance(time.Second)
+	restarted := New(awsapi.Identity{Account: awsapi.DefaultAccount, Region: awsapi.DefaultRegion}, clk)
+	if err := restarted.CreateStream("orders", 1); err != nil {
+		t.Fatalf("CreateStream: %v", err)
+	}
+	if err := before.DeleteStream("orders"); err != nil {
+		t.Fatalf("DeleteStream: %v", err)
+	}
+	if err := before.CreateStream("orders", 1); err != nil {
+		t.Fatalf("CreateStream again: %v", err)
+	}
+
+	for name, s := range map[string]*Service{"restarted emulator": restarted, "re-created stream": before} {
+		mustPut(t, s, "k", "new")
+		for _, kind := range []string{"AT_SEQUENCE_NUMBER", "AFTER_SEQUENCE_NUMBER"} {
+			_, err := s.shardIterator(mustStream(t, s), shard, iteratorSpec{kind: kind, seq: checkpoint})
+			if code(err) != "InvalidArgumentException" {
+				t.Errorf("%s: %s of the earlier stream's %s: %v, want InvalidArgumentException",
+					name, kind, formatSeq(checkpoint), err)
+			}
+		}
+		if got := datas(read(t, s, iterate(t, s, shard, iteratorSpec{kind: "TRIM_HORIZON"}), 10).records); len(got) != 1 {
+			t.Errorf("%s: TRIM_HORIZON reads %v, want the one new record", name, got)
+		}
+	}
+}
+
+// A sequence number above any the stream has issued is refused too.
+func TestASequenceNumberAboveTheStreamsIsRefused(t *testing.T) {
+	s, _ := newTestService(t, 1)
+	last := mustPut(t, s, "k", "x").seq
+	_, err := s.shardIterator(mustStream(t, s), "shardId-000000000000", iteratorSpec{kind: "AFTER_SEQUENCE_NUMBER", seq: last + 1000})
+	if code(err) != "InvalidArgumentException" {
+		t.Fatalf("AFTER_SEQUENCE_NUMBER above the stream's: %v, want InvalidArgumentException", err)
+	}
+}
+
 func TestIteratorTypes(t *testing.T) {
 	s, clk := newTestService(t, 1)
 	const shard = "shardId-000000000000"
