@@ -1,0 +1,172 @@
+# A manifest shaped like a real project's: 26 tables, 20 queues (8 with a
+# dead-letter queue), 12 buckets, 4 streams and a state machine. Names are
+# made up; key schemas, indexes, TTLs and the wiring between resources are kept.
+sqs:
+  queues:
+    - name: queue-01
+    - name: queue-02
+    - name: queue-03
+    - name: queue-04
+    - name: queue-05
+    - name: queue-06
+      deadLetter: {queue: queue-02, maxReceiveCount: 5}
+    - name: queue-07
+    - name: queue-08
+      deadLetter: {queue: queue-04, maxReceiveCount: 5}
+    - name: queue-09
+    - name: queue-10
+    - name: queue-11
+    - name: queue-12
+    - name: queue-13
+      deadLetter: {queue: queue-05, maxReceiveCount: 5}
+    - name: queue-14
+      visibilityTimeoutSeconds: 14400
+      deadLetter: {queue: queue-09, maxReceiveCount: 3}
+    - name: queue-15
+    - name: queue-16
+      visibilityTimeoutSeconds: 900
+      deadLetter: {queue: queue-07, maxReceiveCount: 5}
+    - name: queue-17
+      visibilityTimeoutSeconds: 60
+      deadLetter: {queue: queue-10, maxReceiveCount: 5}
+    - name: queue-18
+      visibilityTimeoutSeconds: 900
+      deadLetter: {queue: queue-12, maxReceiveCount: 15}
+    - name: queue-19
+      visibilityTimeoutSeconds: 300
+      deadLetter: {queue: queue-11, maxReceiveCount: 5}
+    - name: queue-20
+      visibilityTimeoutSeconds: 120
+      deadLetter: {queue: queue-15, maxReceiveCount: 5}
+
+kinesis:
+  streams:
+    - {name: stream-01, shards: 1}
+    - {name: stream-02, shards: 1}
+    - {name: stream-03, shards: 1}
+    - {name: stream-04, shards: 1}
+
+s3:
+  buckets:
+    - name: bucket-01
+    - name: bucket-02
+      versioning: true
+      notifications:
+        - {queue: queue-19, prefix: 'packages/', suffix: '.mmig.zst'}
+    - name: bucket-03
+    - name: bucket-04
+    - name: bucket-05
+    - name: bucket-06
+      lifecycle:
+        - {prefix: '', expirationDays: 7}
+    - name: bucket-07
+    - name: bucket-08
+    - name: bucket-09
+    - name: bucket-10
+    - name: bucket-11
+    - name: bucket-12
+
+dynamodb:
+  tables:
+    - name: table-01
+      partitionKey: {name: a1}
+      ttlAttribute: expires_at
+    - name: table-02
+      partitionKey: {name: a1}
+      ttlAttribute: expires_at
+    - name: table-03
+      partitionKey: {name: a1}
+    - name: table-04
+      partitionKey: {name: a1}
+      sortKey: {name: a2}
+      ttlAttribute: expires_at
+    - name: table-05
+      partitionKey: {name: a1}
+      sortKey: {name: a2}
+      ttlAttribute: expires_at
+    - name: table-06
+      partitionKey: {name: a1}
+      sortKey: {name: a2}
+    - name: table-07
+      partitionKey: {name: a1}
+      sortKey: {name: a2}
+    - name: table-08
+      partitionKey: {name: a1}
+      sortKey: {name: a2}
+      ttlAttribute: expires_at
+    - name: table-09
+      partitionKey: {name: a1}
+      sortKey: {name: a2}
+      ttlAttribute: expires_at
+    - name: table-10
+      partitionKey: {name: a1}
+      sortKey: {name: a2}
+    - name: table-11
+      partitionKey: {name: a1}
+      sortKey: {name: a2}
+      ttlAttribute: expires_at
+    - name: table-12
+      partitionKey: {name: a1}
+      sortKey: {name: a2, type: N}
+      ttlAttribute: expires_at
+    - name: table-13
+      partitionKey: {name: a1}
+    - name: table-14
+      partitionKey: {name: a1}
+    - name: table-15
+      partitionKey: {name: a1}
+    - name: table-16
+      partitionKey: {name: a1}
+    - name: table-17
+      partitionKey: {name: a1}
+      ttlAttribute: expires_at
+    - name: table-18
+      partitionKey: {name: a1}
+      sortKey: {name: a2}
+    - name: table-19
+      partitionKey: {name: a1}
+    - name: table-20
+      partitionKey: {name: a1}
+      sortKey: {name: a2}
+      ttlAttribute: expires_at
+    - name: table-21
+      partitionKey: {name: a1}
+      sortKey: {name: a2}
+      ttlAttribute: expires_at
+      localIndexes:
+        - name: index-1
+          sortKey: {name: a3}
+          projection: INCLUDE
+          nonKeyAttributes: [a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17, a18]
+        - name: index-2
+          sortKey: {name: a19}
+          projection: INCLUDE
+          nonKeyAttributes: [a4, a5, a6, a7, a9, a10, a11, a12, a13, a14, a15]
+        - name: index-3
+          sortKey: {name: a4}
+          projection: INCLUDE
+          nonKeyAttributes: [a5, a20, a19]
+    - name: table-22
+      partitionKey: {name: a1}
+      sortKey: {name: a2}
+      ttlAttribute: expires_at
+      localIndexes:
+        - name: index-1
+          sortKey: {name: a3}
+    - name: table-23
+      partitionKey: {name: a1}
+    - name: table-24
+      partitionKey: {name: a1}
+    - name: table-25
+      partitionKey: {name: a1}
+      ttlAttribute: expires_at
+    - name: table-26
+      partitionKey: {name: a1}
+      sortKey: {name: a2, type: N}
+
+stepFunctions:
+  stateMachines:
+    - name: delayed-notification
+      definitionFile: ../examples/delayed-notification.asl.json
+      substitutions:
+        QueueUrl: http://localhost:4566/000000000000/queue-01

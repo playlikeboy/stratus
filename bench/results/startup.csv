@@ -1,0 +1,21 @@
+emulator,rep,ready_s,mem_mib
+stratus example,1,0.154,3.1
+stratus example,2,0.151,3.0
+stratus example,3,0.159,3.0
+stratus example,4,0.152,3.1
+stratus example,5,0.192,3.0
+localstack example,1,8.594,542.6
+localstack example,2,8.599,554.5
+localstack example,3,8.154,565.7
+localstack example,4,8.072,563.0
+localstack example,5,7.958,572.6
+stratus large,1,0.235,3.3
+stratus large,2,0.133,3.2
+stratus large,3,0.267,3.2
+stratus large,4,0.281,3.1
+stratus large,5,0.170,3.2
+localstack large,1,13.666,660.6
+localstack large,2,13.486,648.4
+localstack large,3,12.540,625.8
+localstack large,4,15.608,632.5
+localstack large,5,18.964,636.4

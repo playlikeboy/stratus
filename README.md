@@ -156,6 +156,25 @@ The emulator stops with the test. `srv.Reset()` returns it to the manifest's sta
 `stratustest.WithTLS()` serves it over HTTPS; pass `srv.Client()` to the AWS client as its
 `HTTPClient`.
 
+## Compared with LocalStack
+
+Both in Docker with 1 CPU and 2 GB each, started from the same manifest, driven by the AWS SDK for
+Go. Method, every operation and its caveats: [`bench/README.md`](bench/README.md); rerun with
+`bench/run.sh`.
+
+| | LocalStack (`community-archive`) | stratus |
+|---|---|---|
+| Ready with 63 resources | 13.7 s | **0.24 s** |
+| Memory once ready | 636 MiB | **3 MiB** |
+| Image | 1.81 GB | **12.9 MB** |
+| DynamoDB PutItem, 32 clients | 194 ops/s, p99 373 ms | **11 106 ops/s, p99 30 ms** |
+| S3 GetObject 4 KiB, 32 clients | 711 ops/s, p99 101 ms | **11 301 ops/s, p99 8 ms** |
+| S3 PutObject 256 KiB, 32 clients | 329 ops/s, p99 201 ms | **663 ops/s, p99 125 ms** |
+| SQS SendMessage, 32 clients | 883 ops/s, p99 98 ms | **13 058 ops/s, p99 6 ms** |
+| Kinesis PutRecord, 32 clients | 64 ops/s, p99 2.2 s | **13 580 ops/s, p99 5 ms** |
+
+This compares speed, not behaviour: see each service's "Not emulated" column above.
+
 ## Develop
 
 ```sh
