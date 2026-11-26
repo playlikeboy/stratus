@@ -19,6 +19,8 @@
 docker run --rm -p 4566:4566 stratusemulator/stratus
 ```
 
+<p align="center"><img src="assets/screenshots/panel-tour.gif" alt="The stratus web panel: the overview, a Kinesis stream whose KPL-aggregated records are decoded, and a DynamoDB item being edited" width="960"></p>
+
 A local emulator of the AWS services an application needs in development and
 end-to-end tests. One static Go binary, ready in milliseconds; S3 object bytes are kept on disk,
 all other state in memory.
@@ -184,6 +186,11 @@ stream, bucket, table and state machine with its counts, refreshed every 2 secon
 resources of each kind. **Reset** returns to the manifest's state, **Expire TTL** deletes expired
 DynamoDB items.
 
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/panel-overview-light.png">
+  <img src="assets/screenshots/panel-overview-dark.png" alt="The overview of the web panel: a card per queue, stream, bucket, table and state machine with its counts">
+</picture>
+
 A resource's name opens its page: its settings, a search suited to the service, its operations and
 its data, refreshed every 3 seconds (not while you edit it).
 
@@ -203,6 +210,10 @@ user records, each with its partition key; gzip and zlib payloads are decompress
 and JSON is indented, so a record reads `KPL → gzip → JSON`. A search by partition key finds an
 aggregate by the keys inside it. zstd is recognised but not decompressed. The same decoding shows
 S3 objects, SQS bodies and execution input and output.
+
+| A Kinesis record aggregated by the KPL, found by an inner partition key | A DynamoDB item, edited in place |
+|---|---|
+| ![Three gzip-compressed JSON records decoded from one KPL aggregate](assets/screenshots/panel-kinesis-kpl.png) | ![The items of a table searched by partition key, one of them open for editing](assets/screenshots/panel-dynamodb-edit.png) |
 
 The panel is part of the binary (server-rendered with [htmx](https://htmx.org) 2.0.4, embedded),
 needs no network, and has no login, like the rest of the endpoint: anyone who can reach the port
