@@ -90,6 +90,7 @@ func New(cfg Config) (*Server, error) {
 	s.control.HandleFunc("GET /_stratus/ready", s.handleReady)
 	s.control.HandleFunc("POST /_stratus/reset", s.handleReset)
 	s.control.HandleFunc("POST /_stratus/expire-ttl", s.handleExpireTTL)
+	s.registerUI()
 	// Kept so that health checks written for LocalStack keep working.
 	s.control.HandleFunc("GET /_localstack/health", s.handleLocalStackHealth)
 
