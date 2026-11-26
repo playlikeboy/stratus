@@ -1,47 +1,119 @@
 ---
 hide:
-  - navigation
+  - toc
 ---
 
 # stratus
 
-A local emulator of the AWS services an application needs in development and end-to-end tests:
-**SQS, S3, DynamoDB, Kinesis and Step Functions**. It is one static Go binary, ready in
-milliseconds, with the resources you declare in a manifest.
+A local emulator of **SQS, S3, DynamoDB, Kinesis and Step Functions** for development and
+end-to-end tests: one static Go binary, ready in milliseconds, with the resources you declare in
+a manifest.
 
 ```sh
 docker run --rm -p 4566:4566 stratusemulator/stratus
 ```
 
-![The stratus web panel: the overview, a Kinesis stream whose KPL-aggregated records are decoded, and a DynamoDB item being edited](assets/panel-tour.gif)
+<div class="stratus-cards" markdown>
+
+<a class="stratus-card" href="getting-started/">
+  <span class="name">getting-started</span>
+  <span class="count">5<small>minutes</small></span>
+  <span class="meta">manifest · run · use · look inside · start over</span>
+</a>
+
+<div class="stratus-card" markdown>
+<span class="name">guides</span>
+<span class="count">6<small>guides</small></span>
+
+- [Docker and Compose](guides/docker.md)
+- [Go tests](guides/go-tests.md)
+- [Testcontainers](guides/testcontainers.md)
+- [Keeping data across restarts](guides/persistence.md)
+- [Moving from LocalStack](guides/from-localstack.md)
+- [Web panel](guides/web-panel.md)
+</div>
+
+<div class="stratus-card" markdown>
+<span class="name">reference</span>
+<span class="count">5<small>pages</small></span>
+
+- [Manifest](reference/manifest.md)
+- [Command line](reference/cli.md)
+- [Control endpoints](reference/endpoints.md)
+- [Services and operations](reference/services.md)
+- [Go packages](reference/go.md)
+</div>
+
+<div class="stratus-card" markdown>
+<span class="name">explanation</span>
+<span class="count">3<small>pages</small></span>
+
+- [How stratus works](explanation/architecture.md)
+- [How state is kept](explanation/state.md)
+- [Compared with LocalStack](explanation/localstack.md)
+</div>
+
+<div class="stratus-card" markdown>
+<span class="name">contributing</span>
+<span class="count">3<small>pages</small></span>
+
+- [Build and test](contributing/index.md)
+- [Adding an operation](contributing/adding-an-operation.md)
+- [Releases](contributing/releases.md)
+</div>
+
+</div>
+
+## Services
+
+<div class="stratus-cards" markdown>
+
+<a class="stratus-card" href="reference/services/#sqs">
+  <span class="name">sqs</span>
+  <span class="count">18<small>operations</small></span>
+  <span class="meta">standard · FIFO · DLQ · long polling</span>
+</a>
+
+<a class="stratus-card" href="reference/services/#kinesis">
+  <span class="name">kinesis</span>
+  <span class="count">15<small>operations</small></span>
+  <span class="meta">shards · every iterator · checkpoints</span>
+</a>
+
+<a class="stratus-card" href="reference/services/#s3">
+  <span class="name">s3</span>
+  <span class="count">28<small>operations</small></span>
+  <span class="meta">versioning · multipart · checksums · events</span>
+</a>
+
+<a class="stratus-card" href="reference/services/#dynamodb">
+  <span class="name">dynamodb</span>
+  <span class="count">16<small>operations</small></span>
+  <span class="meta">expressions · indexes · transactions · TTL</span>
+</a>
+
+<a class="stratus-card" href="reference/services/#step-functions">
+  <span class="name">step functions</span>
+  <span class="count">13<small>operations</small></span>
+  <span class="meta">Wait · Choice · Retry/Catch · task tokens</span>
+</a>
+
+</div>
 
 ## Why stratus
 
-**One port, any credentials**
-:   Every service is served on `:4566`. Signatures are never checked, so any AWS SDK or the AWS CLI
-    works with placeholder credentials.
-
-**Resources are declared, not scripted**
-:   A YAML [manifest](reference/manifest.md) lists the queues, streams, buckets, tables and state
-    machines that exist at start. stratus reports ready only once all of them exist.
-
-**Built for tests**
-:   `POST /_stratus/reset` returns to the manifest between suites. The [`stratustest`](guides/go-tests.md)
-    package runs the emulator inside a Go test with no container, and the
-    [Testcontainers module](guides/testcontainers.md) runs it in one.
-
-**Keeps data when you want it to**
-:   With `-state-dir`, the data of the resources you choose survives restarts. That covers every service,
-    in-flight messages, Kinesis checkpoints and running executions included. See
-    [Keeping data across restarts](guides/persistence.md).
-
-**A panel to look inside**
-:   `/_stratus/ui` shows every resource and its data. You can search it and change it, and Kinesis
-    records aggregated by the KPL are decoded.
+| | |
+|---|---|
+| **One port, any credentials** | every service on `:4566`; signatures are never checked |
+| **Declared, not scripted** | a [manifest](reference/manifest.md) lists what exists; ready means it all exists |
+| **Built for tests** | `POST /_stratus/reset` between suites; [in-process](guides/go-tests.md) or [in a container](guides/testcontainers.md) |
+| **Keeps data when you want** | `-state-dir` keeps all five services across restarts, [per resource](guides/persistence.md) |
+| **A panel to look inside** | `/_stratus/ui` shows, searches and edits every resource; KPL records decoded |
 
 ## How fast
 
-Both in Docker with 1 CPU and 2 GB, from the same 63-resource manifest:
+Both in Docker with 1 CPU and 2 GB, from the same 63-resource manifest
+([method and full results](explanation/localstack.md)):
 
 | | LocalStack | stratus |
 |---|---|---|
@@ -51,13 +123,4 @@ Both in Docker with 1 CPU and 2 GB, from the same 63-resource manifest:
 | SQS SendMessage, 32 clients | 883 ops/s | **13 058 ops/s** |
 | Kinesis PutRecord, 32 clients | 64 ops/s | **13 580 ops/s** |
 
-[The full comparison](explanation/localstack.md) explains the method and what is *not* compared.
-
-## Where to go next
-
-- **New to stratus?** [Getting started](getting-started.md) takes five minutes.
-- **Running it next to your services?** See [Docker and Compose](guides/docker.md).
-- **Writing tests?** See [Go tests](guides/go-tests.md) or [Testcontainers](guides/testcontainers.md).
-- **Replacing LocalStack?** See [Moving from LocalStack](guides/from-localstack.md).
-- **Looking something up?** The [reference](reference/index.md) lists every manifest key, flag,
-  endpoint and operation.
+![The stratus web panel: the overview, a Kinesis stream whose KPL-aggregated records are decoded, and a DynamoDB item being edited](assets/panel-tour.gif)

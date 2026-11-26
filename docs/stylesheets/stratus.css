@@ -104,6 +104,99 @@
   margin-top: 1rem;
 }
 
+/* The navigation's sections read as the panel's section headings
+   ("Queues SQS · 5"): small, bold, muted capitals. */
+.md-nav--primary .md-nav__item--section > .md-nav__link,
+.md-nav--primary .md-nav__item--section > label.md-nav__link {
+  color: var(--stratus-muted);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-top: 1.1rem;
+}
+.md-nav__link--active,
+.md-nav__link:hover {
+  color: var(--stratus-accent);
+}
+
+/* Cards, as the panel's resource cards: a monospace name, a big count with
+   its label, a line of details, and a coloured edge on the left. */
+.md-typeset .stratus-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12.5rem, 1fr));
+  gap: 0.8rem;
+  align-items: start;
+  margin: 1rem 0 1.6rem;
+}
+.md-typeset .stratus-cards > .stratus-card {
+  margin: 0;
+}
+.md-typeset .stratus-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.8rem 0.9rem 0.8rem 1rem;
+  background: var(--stratus-card);
+  border: 1px solid var(--stratus-line);
+  border-left: 4px solid var(--stratus-green);
+  border-radius: 10px;
+  box-shadow: var(--stratus-shadow);
+  color: var(--stratus-text);
+  transition: border-color 0.15s, transform 0.15s;
+}
+.md-typeset a.stratus-card:hover,
+.md-typeset div.stratus-card:hover {
+  border-color: var(--stratus-accent);
+  border-left-color: var(--stratus-accent);
+  text-decoration: none;
+}
+.md-typeset a.stratus-card:hover {
+  transform: translateY(-1px);
+}
+.md-typeset .stratus-card .name {
+  font-family: var(--md-code-font-family);
+  font-size: 0.72rem;
+}
+.md-typeset .stratus-card .count {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.md-typeset .stratus-card .count small {
+  font-size: 0.68rem;
+  font-weight: 400;
+  color: var(--stratus-muted);
+  margin-left: 0.3rem;
+}
+.md-typeset .stratus-card .meta {
+  font-size: 0.64rem;
+  color: var(--stratus-muted);
+}
+/* A card written in Markdown wraps its name and count in a paragraph. */
+.md-typeset .stratus-card > p {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin: 0;
+}
+.md-typeset .stratus-card ul {
+  margin: 0.2rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.68rem;
+}
+.md-typeset .stratus-card ul li {
+  margin: 0.15rem 0 0;
+}
+
+/* The header already carries the wordmark: the navigation needs no title. */
+@media screen and (min-width: 76.25em) {
+  .md-nav--primary > .md-nav__title {
+    display: none;
+  }
+}
+
 /* Headings as bold as the panel's titles. */
 .md-typeset h1 {
   color: var(--stratus-text);
