@@ -1,8 +1,17 @@
-# stratus
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo/stratus-mark-dark.svg">
+    <img src="assets/logo/stratus-mark.svg" alt="stratus" width="112">
+  </picture>
+</p>
 
-[![ci](https://github.com/stratus-emulator/stratus/actions/workflows/ci.yml/badge.svg)](https://github.com/stratus-emulator/stratus/actions/workflows/ci.yml)
-[![Docker Hub](https://img.shields.io/docker/v/stratusemulator/stratus?sort=semver&label=docker)](https://hub.docker.com/r/stratusemulator/stratus)
-[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
+<h1 align="center">stratus</h1>
+
+<p align="center">
+  <a href="https://github.com/stratus-emulator/stratus/actions/workflows/ci.yml"><img src="https://github.com/stratus-emulator/stratus/actions/workflows/ci.yml/badge.svg" alt="ci"></a>
+  <a href="https://hub.docker.com/r/stratusemulator/stratus"><img src="https://img.shields.io/docker/v/stratusemulator/stratus?sort=semver&label=docker" alt="Docker Hub"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue" alt="License: Apache 2.0"></a>
+</p>
 
 ```sh
 docker run --rm -p 4566:4566 stratusemulator/stratus

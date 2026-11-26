@@ -180,3 +180,12 @@ form.op .row .field, form.op > .field { width: 100%; }
   border-left: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: translateY(-70%) rotate(-45deg); }
 .create { display: grid; gap: 14px; max-width: 560px; }
 .create form.op { border: 0; padding: 0; }
+
+/* The logo in the header: the mark in the theme's colours, then the name. */
+:root { --logo-a: #8a8aee; --logo-b: #4646c8; }
+@media (prefers-color-scheme: dark) { :root { --logo-a: #c6c6ff; --logo-b: #7d7df4; } }
+header h1 a { display: inline-flex; align-items: center; gap: 9px; }
+.logo { width: 30px; height: 26px; flex: none; }
+.logo-a { fill: var(--logo-a); }
+.logo-b { fill: var(--logo-b); }
+.wordmark { font-weight: inherit; }
