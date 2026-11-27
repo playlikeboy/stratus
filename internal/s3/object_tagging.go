@@ -7,6 +7,8 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 const (
@@ -29,15 +31,25 @@ type objectTagXML struct {
 	Value string `xml:"Value"`
 }
 
+func isValidObjTagText(s string) bool {
+	for _, r := range s {
+		if unicode.IsLetter(r) || unicode.IsNumber(r) || r == ' ' || strings.ContainsRune("_.:/=+-@", r) {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
 func validateObjectTags(tags map[string]string) error {
 	if len(tags) > maxObjectTags {
 		return errInvalidTag("Object tags cannot be greater than 10 tags")
 	}
 	for k, v := range tags {
-		if k == "" || len(k) > maxObjTagKeyLen {
+		if k == "" || utf8.RuneCountInString(k) > maxObjTagKeyLen || strings.HasPrefix(k, "aws:") || !isValidObjTagText(k) {
 			return errInvalidTag("The TagKey you have provided is invalid.")
 		}
-		if len(v) > maxObjTagValueLen {
+		if utf8.RuneCountInString(v) > maxObjTagValueLen || !isValidObjTagText(v) {
 			return errInvalidTag("The TagValue you have provided is invalid.")
 		}
 	}
@@ -54,16 +66,13 @@ func parseObjectTaggingXML(r *http.Request) (map[string]string, error) {
 	}
 	tags := make(map[string]string, len(doc.TagSet.Tags))
 	for _, t := range doc.TagSet.Tags {
-		if t.Key == "" || len(t.Key) > maxObjTagKeyLen {
-			return nil, errInvalidTag("The TagKey you have provided is invalid.")
-		}
-		if len(t.Value) > maxObjTagValueLen {
-			return nil, errInvalidTag("The TagValue you have provided is invalid.")
-		}
 		if _, dup := tags[t.Key]; dup {
 			return nil, errInvalidTag("Cannot provide multiple Tags with the same key.")
 		}
 		tags[t.Key] = t.Value
+	}
+	if err := validateObjectTags(tags); err != nil {
+		return nil, err
 	}
 	return tags, nil
 }

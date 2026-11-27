@@ -68,13 +68,14 @@ type objectSnapshot struct {
 }
 
 type uploadSnapshot struct {
-	ID           string         `json:"id"`
-	Key          string         `json:"key"`
-	Initiated    time.Time      `json:"initiated"`
-	Meta         metaSnapshot   `json:"meta"`
-	Algorithm    string         `json:"algorithm,omitempty"`
-	ChecksumType string         `json:"checksumType,omitempty"`
-	Parts        []partSnapshot `json:"parts,omitempty"`
+	ID           string            `json:"id"`
+	Key          string            `json:"key"`
+	Initiated    time.Time         `json:"initiated"`
+	Meta         metaSnapshot      `json:"meta"`
+	Tags         map[string]string `json:"tags,omitempty"`
+	Algorithm    string            `json:"algorithm,omitempty"`
+	ChecksumType string            `json:"checksumType,omitempty"`
+	Parts        []partSnapshot    `json:"parts,omitempty"`
 }
 
 type partSnapshot struct {
@@ -122,7 +123,7 @@ func snapshotBucket(b *bucket) bucketSnapshot {
 	}
 	for _, u := range b.uploads {
 		us := uploadSnapshot{ID: u.id, Key: u.key, Initiated: u.initiated, Meta: snapshotMeta(u.meta),
-			Algorithm: u.algorithm, ChecksumType: u.checksumType}
+			Tags: maps.Clone(u.tags), Algorithm: u.algorithm, ChecksumType: u.checksumType}
 		for _, p := range u.parts {
 			us.Parts = append(us.Parts, partSnapshot{Number: p.number, Body: blobRef{File: p.body.name(), Size: p.body.size},
 				ETag: p.etag, LastModified: p.lastModified, Checksum: p.checksum})
@@ -205,7 +206,7 @@ func (s *Service) restoreBucket(bs bucketSnapshot, keep map[string]bool) *bucket
 	}
 	for _, us := range bs.Uploads {
 		u := &upload{id: us.ID, key: us.Key, initiated: us.Initiated, meta: restoreMeta(us.Meta),
-			algorithm: us.Algorithm, checksumType: us.ChecksumType, parts: map[int]*part{}}
+			tags: maps.Clone(us.Tags), algorithm: us.Algorithm, checksumType: us.ChecksumType, parts: map[int]*part{}}
 		for _, ps := range us.Parts {
 			body, err := s.blobs.adopt(ps.Body.File, ps.Body.Size)
 			if err != nil {

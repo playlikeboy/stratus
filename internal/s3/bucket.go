@@ -156,8 +156,16 @@ func (b *bucket) removeVersion(key, wireID string) *object {
 
 func (b *bucket) setVersions(key string, versions []*object) {
 	if len(versions) == 0 {
+		for _, v := range b.objects[key] {
+			delete(b.objectTags, tagTarget{key: key, versionID: v.versionID})
+		}
 		delete(b.objects, key)
 		return
+	}
+	for _, old := range b.objects[key] {
+		if !slices.Contains(versions, old) {
+			delete(b.objectTags, tagTarget{key: key, versionID: old.versionID})
+		}
 	}
 	b.objects[key] = versions
 }

@@ -141,4 +141,98 @@ func TestSDKObjectTagging(t *testing.T) {
 	if len(gotV2After.TagSet) != 10 {
 		t.Fatalf("v2 tags unexpectedly altered: %d", len(gotV2After.TagSet))
 	}
+
+	// CopyObject copies source tags by default and replaces them with TaggingDirective REPLACE.
+	if _, err := e.client.CopyObject(ctx, &s3sdk.CopyObjectInput{
+		Bucket:     aws.String("objs"),
+		Key:        aws.String("doc-copy.txt"),
+		CopySource: aws.String("objs/doc.txt"),
+	}); err != nil {
+		t.Fatalf("CopyObject default: %v", err)
+	}
+	copiedTags, err := e.client.GetObjectTagging(ctx, &s3sdk.GetObjectTaggingInput{
+		Bucket: aws.String("objs"), Key: aws.String("doc-copy.txt"),
+	})
+	if err != nil || len(copiedTags.TagSet) != 10 {
+		t.Fatalf("CopyObject default tags = %d, %v", len(copiedTags.TagSet), err)
+	}
+
+	if _, err := e.client.CopyObject(ctx, &s3sdk.CopyObjectInput{
+		Bucket:           aws.String("objs"),
+		Key:              aws.String("doc-replaced.txt"),
+		CopySource:       aws.String("objs/doc.txt"),
+		TaggingDirective: types.TaggingDirectiveReplace,
+		Tagging:          aws.String("copied=replaced"),
+	}); err != nil {
+		t.Fatalf("CopyObject replace: %v", err)
+	}
+	replacedTags, err := e.client.GetObjectTagging(ctx, &s3sdk.GetObjectTaggingInput{
+		Bucket: aws.String("objs"), Key: aws.String("doc-replaced.txt"),
+	})
+	if err != nil || len(replacedTags.TagSet) != 1 || aws.ToString(replacedTags.TagSet[0].Key) != "copied" {
+		t.Fatalf("CopyObject replace tags = %+v, %v", replacedTags, err)
+	}
+
+	// Multipart upload preserves x-amz-tagging on completion.
+	mp, err := e.client.CreateMultipartUpload(ctx, &s3sdk.CreateMultipartUploadInput{
+		Bucket:  aws.String("objs"),
+		Key:     aws.String("multi.bin"),
+		Tagging: aws.String("part=one&kind=mp"),
+	})
+	if err != nil {
+		t.Fatalf("CreateMultipartUpload: %v", err)
+	}
+	upPart, err := e.client.UploadPart(ctx, &s3sdk.UploadPartInput{
+		Bucket:     aws.String("objs"),
+		Key:        aws.String("multi.bin"),
+		UploadId:   mp.UploadId,
+		PartNumber: aws.Int32(1),
+		Body:       strings.NewReader("hello-multipart"),
+	})
+	if err != nil {
+		t.Fatalf("UploadPart: %v", err)
+	}
+	if _, err := e.client.CompleteMultipartUpload(ctx, &s3sdk.CompleteMultipartUploadInput{
+		Bucket:   aws.String("objs"),
+		Key:      aws.String("multi.bin"),
+		UploadId: mp.UploadId,
+		MultipartUpload: &types.CompletedMultipartUpload{
+			Parts: []types.CompletedPart{{PartNumber: aws.Int32(1), ETag: upPart.ETag}},
+		},
+	}); err != nil {
+		t.Fatalf("CompleteMultipartUpload: %v", err)
+	}
+	mpTags, err := e.client.GetObjectTagging(ctx, &s3sdk.GetObjectTaggingInput{
+		Bucket: aws.String("objs"), Key: aws.String("multi.bin"),
+	})
+	if err != nil || len(mpTags.TagSet) != 2 {
+		t.Fatalf("multipart tags = %+v, %v", mpTags, err)
+	}
+
+	// Rune limits, aws: prefix, and disallowed chars.
+	if _, err := e.client.PutObjectTagging(ctx, &s3sdk.PutObjectTaggingInput{
+		Bucket: aws.String("objs"),
+		Key:    aws.String("doc.txt"),
+		Tagging: &types.Tagging{TagSet: []types.Tag{
+			{Key: aws.String(strings.Repeat("ł", 128)), Value: aws.String(strings.Repeat("ó", 256))},
+		}},
+	}); err != nil {
+		t.Fatalf("PutObjectTagging 128/256 Unicode chars: %v", err)
+	}
+	_, err = e.client.PutObjectTagging(ctx, &s3sdk.PutObjectTaggingInput{
+		Bucket: aws.String("objs"),
+		Key:    aws.String("doc.txt"),
+		Tagging: &types.Tagging{TagSet: []types.Tag{
+			{Key: aws.String("aws:internal"), Value: aws.String("v")},
+		}},
+	})
+	wantAPIError(t, err, "InvalidTag")
+	_, err = e.client.PutObjectTagging(ctx, &s3sdk.PutObjectTaggingInput{
+		Bucket: aws.String("objs"),
+		Key:    aws.String("doc.txt"),
+		Tagging: &types.Tagging{TagSet: []types.Tag{
+			{Key: aws.String("bad!key"), Value: aws.String("v")},
+		}},
+	})
+	wantAPIError(t, err, "InvalidTag")
 }

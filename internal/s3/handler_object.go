@@ -39,17 +39,11 @@ func (s *Service) putObject(w http.ResponseWriter, r *http.Request, bucketName, 
 		return err
 	}
 	obj := &object{key: key, body: body, etag: etagOf(p.data), meta: metaFromHeaders(r.Header), checksum: sum}
-	stored, err := s.store(bucketName, obj, cond, eventPut, sourceOf(w, r))
+	stored, err := s.commitWithTags(bucketName, obj, cond, eventPut, sourceOf(w, r),
+		func(*bucket) error { return nil },
+		func(*bucket) map[string]string { return tags })
 	if err != nil {
 		return err
-	}
-	if len(tags) > 0 {
-		if err := s.updateBucket(bucketName, func(b *bucket) error {
-			b.objectTags[tagTarget{key: stored.key, versionID: stored.versionID}] = tags
-			return nil
-		}); err != nil {
-			return err
-		}
 	}
 	h := w.Header()
 	h.Set("ETag", stored.etag)
