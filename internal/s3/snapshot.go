@@ -55,15 +55,16 @@ type checksumSnapshot struct {
 }
 
 type objectSnapshot struct {
-	Key          string           `json:"key"`
-	VersionID    string           `json:"versionId,omitempty"`
-	DeleteMarker bool             `json:"deleteMarker,omitempty"`
-	Body         *blobRef         `json:"body,omitempty"` // nil for a delete marker
-	ETag         string           `json:"etag,omitempty"`
-	LastModified time.Time        `json:"lastModified"`
-	Meta         metaSnapshot     `json:"meta"`
-	Checksum     checksumSnapshot `json:"checksum"`
-	PartSizes    []int64          `json:"partSizes,omitempty"`
+	Key          string            `json:"key"`
+	VersionID    string            `json:"versionId,omitempty"`
+	DeleteMarker bool              `json:"deleteMarker,omitempty"`
+	Body         *blobRef          `json:"body,omitempty"` // nil for a delete marker
+	ETag         string            `json:"etag,omitempty"`
+	LastModified time.Time         `json:"lastModified"`
+	Meta         metaSnapshot      `json:"meta"`
+	Checksum     checksumSnapshot  `json:"checksum"`
+	PartSizes    []int64           `json:"partSizes,omitempty"`
+	Tags         map[string]string `json:"tags,omitempty"`
 }
 
 type uploadSnapshot struct {
@@ -111,6 +112,7 @@ func snapshotBucket(b *bucket) bucketSnapshot {
 				Key: o.key, VersionID: o.versionID, DeleteMarker: o.deleteMarker, ETag: o.etag,
 				LastModified: o.lastModified, Meta: snapshotMeta(o.meta), PartSizes: o.partSizes,
 				Checksum: checksumSnapshot{Algorithm: o.checksum.algorithm, Value: o.checksum.value, Type: o.checksum.typ},
+				Tags:     maps.Clone(b.objectTags[tagTarget{key: o.key, versionID: o.versionID}]),
 			}
 			if o.body != nil {
 				ob.Body = &blobRef{File: o.body.name(), Size: o.body.size}
@@ -197,6 +199,9 @@ func (s *Service) restoreBucket(bs bucketSnapshot, keep map[string]bool) *bucket
 			o.body = body
 		}
 		b.objects[o.key] = append(b.objects[o.key], o)
+		if len(ob.Tags) > 0 {
+			b.objectTags[tagTarget{key: o.key, versionID: o.versionID}] = maps.Clone(ob.Tags)
+		}
 	}
 	for _, us := range bs.Uploads {
 		u := &upload{id: us.ID, key: us.Key, initiated: us.Initiated, meta: restoreMeta(us.Meta),
