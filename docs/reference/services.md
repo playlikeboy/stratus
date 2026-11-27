@@ -29,15 +29,15 @@ can redrive a DLQ), permissions (`AddPermission`).
 `AddTagsToStream` · `CreateStream` · `DecreaseStreamRetentionPeriod` · `DeleteStream` ·
 `DescribeStream` · `DescribeStreamSummary` · `GetRecords` · `GetShardIterator` ·
 `IncreaseStreamRetentionPeriod` · `ListShards` · `ListStreams` · `ListTagsForStream` · `PutRecord` ·
-`PutRecords` · `RemoveTagsFromStream`
+`PutRecords` · `RemoveTagsFromStream` · `StartStreamEncryption` · `StopStreamEncryption`
 
 **Covers:** streams and shards, every shard iterator type with expiry, `MillisBehindLatest`,
-retention, tags. Sequence numbers are 56 digits, like Kinesis's, and grow across streams of the same
+retention, tags, server-side encryption settings. Sequence numbers are 56 digits, like Kinesis's, and grow across streams of the same
 name: a checkpoint of an earlier stream (deleted, or from before a restart without `-state-dir`) is
 refused with `InvalidArgumentException`, as Kinesis does.
 
 **Not emulated:** enhanced fan-out (`SubscribeToShard`, `RegisterStreamConsumer`), shard split and
-merge, `UpdateShardCount`, encryption.
+merge, `UpdateShardCount`.
 
 ## S3
 
