@@ -2,21 +2,13 @@ package kinesis_test
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	sdk "github.com/aws/aws-sdk-go-v2/service/kinesis"
 	"github.com/aws/aws-sdk-go-v2/service/kinesis/types"
-	"github.com/aws/smithy-go"
 )
-
-func wantAPIErrorCode(t *testing.T, err error, want string) {
-	t.Helper()
-	var apiErr smithy.APIError
-	if !errors.As(err, &apiErr) || apiErr.ErrorCode() != want {
-		t.Fatalf("error = %v, want code %q", err, want)
-	}
-}
 
 func TestSDKStreamEncryption(t *testing.T) {
 	e := newEnv(t)
@@ -32,33 +24,63 @@ func TestSDKStreamEncryption(t *testing.T) {
 	}
 
 	// Validation errors.
+	var invalid *types.InvalidArgumentException
+	var validation *types.ValidationException
+	var notFound *types.ResourceNotFoundException
+
 	_, err = e.client.StartStreamEncryption(ctx, &sdk.StartStreamEncryptionInput{
 		StreamName:     aws.String("secure"),
 		EncryptionType: types.EncryptionTypeNone,
 		KeyId:          aws.String("alias/test"),
 	})
-	wantAPIErrorCode(t, err, "InvalidArgumentException")
+	if !errors.As(err, &invalid) {
+		t.Fatalf("NONE EncryptionType err = %v, want InvalidArgumentException", err)
+	}
+
+	_, err = e.client.StartStreamEncryption(ctx, &sdk.StartStreamEncryptionInput{
+		StreamName:     aws.String("secure"),
+		EncryptionType: types.EncryptionType("FOO"),
+		KeyId:          aws.String("alias/test"),
+	})
+	if !errors.As(err, &validation) {
+		t.Fatalf("unknown EncryptionType err = %v, want ValidationException", err)
+	}
 
 	_, err = e.client.StartStreamEncryption(ctx, &sdk.StartStreamEncryptionInput{
 		StreamName:     aws.String("secure"),
 		EncryptionType: types.EncryptionTypeKms,
 		KeyId:          aws.String(""),
 	})
-	wantAPIErrorCode(t, err, "ValidationException")
+	if !errors.As(err, &validation) {
+		t.Fatalf("missing KeyId err = %v, want ValidationException", err)
+	}
+
+	_, err = e.client.StartStreamEncryption(ctx, &sdk.StartStreamEncryptionInput{
+		StreamName:     aws.String("secure"),
+		EncryptionType: types.EncryptionTypeKms,
+		KeyId:          aws.String(strings.Repeat("a", 2049)),
+	})
+	if !errors.As(err, &validation) {
+		t.Fatalf("oversized KeyId err = %v, want ValidationException", err)
+	}
 
 	_, err = e.client.StopStreamEncryption(ctx, &sdk.StopStreamEncryptionInput{
 		StreamName:     aws.String("secure"),
 		EncryptionType: types.EncryptionTypeNone,
 		KeyId:          aws.String("alias/test"),
 	})
-	wantAPIErrorCode(t, err, "InvalidArgumentException")
+	if !errors.As(err, &invalid) {
+		t.Fatalf("Stop NONE EncryptionType err = %v, want InvalidArgumentException", err)
+	}
 
 	_, err = e.client.StartStreamEncryption(ctx, &sdk.StartStreamEncryptionInput{
 		StreamName:     aws.String("missing"),
 		EncryptionType: types.EncryptionTypeKms,
 		KeyId:          aws.String("alias/test"),
 	})
-	wantAPIErrorCode(t, err, "ResourceNotFoundException")
+	if !errors.As(err, &notFound) {
+		t.Fatalf("missing stream err = %v, want ResourceNotFoundException", err)
+	}
 
 	const keyID = "arn:aws:kms:eu-central-1:000000000000:key/1234abcd"
 	if _, err := e.client.StartStreamEncryption(ctx, &sdk.StartStreamEncryptionInput{
@@ -93,8 +115,14 @@ func TestSDKStreamEncryption(t *testing.T) {
 		t.Fatalf("StopStreamEncryption: %v", err)
 	}
 
-	desc, _ = e.client.DescribeStream(ctx, &sdk.DescribeStreamInput{StreamName: aws.String("secure")})
-	sum, _ = e.client.DescribeStreamSummary(ctx, &sdk.DescribeStreamSummaryInput{StreamName: aws.String("secure")})
+	desc, err = e.client.DescribeStream(ctx, &sdk.DescribeStreamInput{StreamName: aws.String("secure")})
+	if err != nil {
+		t.Fatalf("DescribeStream after Stop: %v", err)
+	}
+	sum, err = e.client.DescribeStreamSummary(ctx, &sdk.DescribeStreamSummaryInput{StreamName: aws.String("secure")})
+	if err != nil {
+		t.Fatalf("DescribeStreamSummary after Stop: %v", err)
+	}
 	if desc.StreamDescription.EncryptionType != types.EncryptionTypeNone || desc.StreamDescription.KeyId != nil {
 		t.Fatalf("DescribeStream after Stop = (%v, %v)", desc.StreamDescription.EncryptionType, desc.StreamDescription.KeyId)
 	}

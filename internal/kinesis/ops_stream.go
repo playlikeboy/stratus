@@ -3,12 +3,14 @@ package kinesis
 import (
 	"encoding/base64"
 	"sort"
+	"unicode/utf8"
 )
 
 const (
-	defaultDescribeLimit = 100
-	maxListLimit         = 10000
-	maxTagsPerPage       = 50
+	defaultDescribeLimit  = 100
+	maxListLimit          = 10000
+	maxTagsPerPage        = 50
+	maxEncryptionKeyIDLen = 2048
 )
 
 type modeDetails struct {
@@ -140,11 +142,20 @@ type streamEncryptionInput struct {
 }
 
 func validateEncryptionInput(in streamEncryptionInput) error {
-	if in.EncryptionType != "KMS" {
+	switch in.EncryptionType {
+	case "":
+		return errConstraint("encryptionType", "Member must not be null")
+	case "NONE":
 		return errInvalidArgument("EncryptionType must be KMS.")
+	case "KMS":
+	default:
+		return errConstraint("encryptionType", "Member must satisfy enum value set: [NONE, KMS]")
 	}
 	if in.KeyId == "" {
-		return errConstraint("keyId", "Member must have length greater than or equal to 1")
+		return errConstraint("keyId", "Member must not be null")
+	}
+	if utf8.RuneCountInString(in.KeyId) > maxEncryptionKeyIDLen {
+		return errConstraint("keyId", "Member must have length less than or equal to 2048")
 	}
 	return nil
 }
@@ -172,7 +183,7 @@ func (s *Service) startStreamEncryption(in streamEncryptionInput) (any, error) {
 }
 
 func (s *Service) stopStreamEncryption(in streamEncryptionInput) (any, error) {
-	return s.updateStreamEncryption(in, "NONE", "")
+	return s.updateStreamEncryption(in, "", "")
 }
 
 type listStreamsInput struct {
