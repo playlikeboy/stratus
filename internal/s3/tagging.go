@@ -5,6 +5,9 @@ import (
 	"maps"
 	"net/http"
 	"slices"
+	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 const (
@@ -12,6 +15,16 @@ const (
 	maxTagKeyLen   = 128
 	maxTagValueLen = 256
 )
+
+func isValidTagText(s string) bool {
+	for _, r := range s {
+		if unicode.IsLetter(r) || unicode.IsNumber(r) || r == ' ' || strings.ContainsRune("_.:/=+-@", r) {
+			continue
+		}
+		return false
+	}
+	return true
+}
 
 type taggingXML struct {
 	XMLName xml.Name
@@ -39,10 +52,10 @@ func parseTagging(r *http.Request, maxTags int) (map[string]string, error) {
 	}
 	tags := make(map[string]string, len(doc.TagSet.Tags))
 	for _, t := range doc.TagSet.Tags {
-		if t.Key == "" || len(t.Key) > maxTagKeyLen {
+		if t.Key == "" || utf8.RuneCountInString(t.Key) > maxTagKeyLen || strings.HasPrefix(t.Key, "aws:") || !isValidTagText(t.Key) {
 			return nil, errInvalidTag("The TagKey you have provided is invalid.")
 		}
-		if len(t.Value) > maxTagValueLen {
+		if utf8.RuneCountInString(t.Value) > maxTagValueLen || !isValidTagText(t.Value) {
 			return nil, errInvalidTag("The TagValue you have provided is invalid.")
 		}
 		if _, dup := tags[t.Key]; dup {

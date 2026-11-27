@@ -101,6 +101,33 @@ func TestSDKBucketTagging(t *testing.T) {
 	})
 	wantAPIError(t, err, "InvalidTag")
 
+	// Multi-byte UTF-8 characters are counted in Unicode characters (runes), not bytes.
+	if _, err := e.client.PutBucketTagging(ctx, &s3sdk.PutBucketTaggingInput{
+		Bucket: aws.String("tagged"),
+		Tagging: &types.Tagging{TagSet: []types.Tag{
+			{Key: aws.String(strings.Repeat("ł", 128)), Value: aws.String(strings.Repeat("ó", 256))},
+		}},
+	}); err != nil {
+		t.Fatalf("PutBucketTagging 128/256 Unicode chars: %v", err)
+	}
+	_, err = e.client.PutBucketTagging(ctx, &s3sdk.PutBucketTaggingInput{
+		Bucket:  aws.String("tagged"),
+		Tagging: &types.Tagging{TagSet: []types.Tag{{Key: aws.String(strings.Repeat("ł", 129)), Value: aws.String("v")}}},
+	})
+	wantAPIError(t, err, "InvalidTag")
+
+	// Reserved aws: prefix and disallowed characters are rejected.
+	_, err = e.client.PutBucketTagging(ctx, &s3sdk.PutBucketTaggingInput{
+		Bucket:  aws.String("tagged"),
+		Tagging: &types.Tagging{TagSet: []types.Tag{{Key: aws.String("aws:cloudformation:stack"), Value: aws.String("v")}}},
+	})
+	wantAPIError(t, err, "InvalidTag")
+	_, err = e.client.PutBucketTagging(ctx, &s3sdk.PutBucketTaggingInput{
+		Bucket:  aws.String("tagged"),
+		Tagging: &types.Tagging{TagSet: []types.Tag{{Key: aws.String("bad!key"), Value: aws.String("v")}}},
+	})
+	wantAPIError(t, err, "InvalidTag")
+
 	if _, err := e.client.DeleteBucketTagging(ctx, &s3sdk.DeleteBucketTaggingInput{Bucket: aws.String("tagged")}); err != nil {
 		t.Fatalf("DeleteBucketTagging: %v", err)
 	}
